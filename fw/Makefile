@@ -4,8 +4,8 @@
 # Written 2010-2011, 2013 by Werner Almesberger
 # Copyright 2010-2011, 2013 by Werner Almesberger
 #
-# Modified 2020 by Dimitrios-Georgios Akestoridis
-# Copyright 2020 Dimitrios-Georgios Akestoridis
+# Modified 2021 by Jincheng Wang
+# Copyright 2021 Jincheng Wang
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -86,7 +86,7 @@ endif
 
 vpath %.c usb/ attacks/
 
-CFLAGS += -Iinclude -Iusb -Iattacks -I.
+CFLAGS +=  -Iinclude -Iusb -Iattacks -I.
 
 # ----- Verbosity control -----------------------------------------------------
 
@@ -114,7 +114,6 @@ endif
 .PHONY:		prog-app prog-read on off reset
 
 all:		$(NAME).bin boot.hex
-# all:		disclaimer $(NAME).bin boot.hex
 
 $(NAME).elf:	$(OBJS)
 		$(MAKE) version.o

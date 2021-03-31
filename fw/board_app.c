@@ -174,7 +174,7 @@ ISR(TIMER1_CAPT_vect)
 
 	if (irq == IRQ_AMI)
 	{
-		process_trust_center_rejoin(&rejoin_response_flag);
+		// process_trust_center_rejoin(&rejoin_response_flag);
 	}
 	if (irq == IRQ_TRX_END) {
 	}

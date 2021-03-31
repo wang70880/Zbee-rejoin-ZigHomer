@@ -18,9 +18,9 @@ atusb_start(){
 	sudo make clean
 	sudo make dfu ATTACKID=12
 	sleep 4
-	# atusb
-	# command1="sudo ip link set attack0 up"
-	# eval $command1
+	atusb
+	command1="sudo ip link set attack0 up"
+	eval $command1
 }
 
 atusb_stop(){

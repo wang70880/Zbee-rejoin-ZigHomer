@@ -10,32 +10,60 @@
  * (at your option) any later version.
  */
 
+
 #ifndef ATTACK_H
 #define	ATTACK_H
 
-#define IDLE_STATE 1
-#define INIT_STATE 2
-#define WAIT_FOR_LEAVE 3
-#define ACK_ATTACK 4
-#define FINISH_STATE 5
+// #include "zbee/packet-ieee802154.h"
 
-union Integer{
-	uint32_t integer;
-	unsigned char bytes[4];
+enum {
+	ZBEE_MAC_CMD_DATA_RQ,
+	ZBEE_MAC_CMD_BEACON_RQ,
+	ZBEE_MAC_CMD_BEACON_RP,
+	ZBEE_NWK_CMD_REJOIN_RQ,
+	ZBEE_NWK_CMD_REJOIN_RP,
+	ZBEE_APS_CMD_KEY_TRANSPORT
 };
 
-uint8_t detect_packet_type();
-bool detect_beacon_request();
-bool detect_rejoin_request();
-bool detect_data_request();
-void send_rejoin_request(union Integer mac_addr, uint8_t rx_on_when_idle);
-void send_rejoin_response();
-void send_rejoin_request_device(union Integer mac_addr, uint8_t rx_on_when_idle);
-void send_data_request();
-void send_beacon_request();
-void send_beacon_response();
-void send_transport_key();
+typedef union {
+	uint8_t addr_bytes[2];
+	uint16_t addr;
+}addr_16;
 
+// Our defined data structures
+typedef struct {
+    uint16_t     pan;
+    uint64_t     epan;
+    uint16_t     short_addr;
+    uint64_t     long_addr;
+} ieee802154_addr;
+
+typedef struct {
+	uint8_t aack_flag;
+	addr_16 target_short_addr;
+	addr_16 target_pan_id;
+	uint8_t dis_ack;
+	uint8_t pending;
+}rx_aack_config;
+
+
+uint8_t detect_packet_type(void);
+
+
+void send_transport_key1(void);
 void process_trust_center_rejoin(uint8_t *rejoin_response_flag);
+
+void send_data_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
+void send_beacon_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
+void send_beacon_response(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
+
+void send_rejoin_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
+void send_rejoin_response(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
+void send_transport_key(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
+
+void set_rx_aack(rx_aack_config* aack_config);
+void send_zbee_cmd(uint8_t command, uint8_t security,
+				   ieee802154_addr* dst_addr, ieee802154_addr* src_addr,
+				   rx_aack_config* aack_config);
 
 #endif /* !ATTACK_H */

