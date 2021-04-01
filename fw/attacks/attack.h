@@ -14,8 +14,6 @@
 #ifndef ATTACK_H
 #define	ATTACK_H
 
-// #include "zbee/packet-ieee802154.h"
-
 enum {
 	ZBEE_MAC_CMD_DATA_RQ,
 	ZBEE_MAC_CMD_BEACON_RQ,
@@ -49,7 +47,6 @@ typedef struct {
 
 uint8_t detect_packet_type(void);
 
-
 void send_transport_key1(void);
 void process_trust_center_rejoin(uint8_t *rejoin_response_flag);
 
@@ -65,5 +62,7 @@ void set_rx_aack(rx_aack_config* aack_config);
 void send_zbee_cmd(uint8_t command, uint8_t security,
 				   ieee802154_addr* dst_addr, ieee802154_addr* src_addr,
 				   rx_aack_config* aack_config);
+
+void reconnaissance_attack(void);
 
 #endif /* !ATTACK_H */

