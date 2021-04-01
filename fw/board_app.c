@@ -4,6 +4,9 @@
  * Written 2011, 2013 by Werner Almesberger
  * Copyright 2011, 2013 Werner Almesberger
  *
+ * Modified 2021 by Jincheng Wang
+ * Copyright 2021 Jincheng Wang
+ * 
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -11,26 +14,14 @@
  */
 
 
-#include <stddef.h>
-#include <stdbool.h>
-#include <stdint.h>
-
-#include <avr/io.h>
-#include <avr/interrupt.h>
-
-#define F_CPU   8000000UL
-#include <util/delay.h>
-
-#include "usb.h"
-#include "at86rf230.h"
-#include "spi.h"
-#include "mac.h"
-#include "board.h"
 #include "attack.h"
 
+uint8_t detect_packet_type(void);
+uint8_t save_incomming_packets(unsigned char* buf);
 
 static volatile uint32_t timer_h = 0;	/* 2^(16+32) / 8 MHz = ~1.1 years */
-
+uint8_t irq_serial;
+uint8_t rejoin_full_flag = 0;
 
 void reset_cpu(void)
 {
@@ -153,13 +144,101 @@ static void done(void *user)
 }
 
 
+uint8_t detect_packet_type(void)
+{
+	uint8_t phy_len = 0;
+	uint8_t flag = 100;
+	uint8_t fcf[2];
+	uint8_t analyze_mac = 1;
 
-uint8_t irq_serial;
+	spi_begin();
+	spi_io(AT86RF230_BUF_READ);
+	// Analyze phy len
+	phy_len = spi_recv();
+	if (phy_len <= 7) {
+		spi_end();
+		return 0;
+	}
+	// Analyze MAC
+	if (analyze_mac) {
+		// Check MAC FCF
+		_delay_us(32);
+		fcf[0] = spi_recv();
+		_delay_us(32);
+		fcf[1] = spi_recv();
+		if((fcf[0] == 0x03) && (fcf[1] == 0x08)) // Beacon Request
+		{
+			flag = 0;
+		}
+		else if ((fcf[0] == 0x61) && (fcf[1] == 0x88)) // NWK Rejoin Request
+		{
+			if (phy_len < 35) {
+				flag = 2;  // Insecure Rejoin
+			}
+			else {
+				flag = 1;
+			}
+		}
+		else if ((fcf[0] == 0x63) && (fcf[1] == 0x88)) // Data Request
+		{
+			flag = 3;
+		}
+	}
+	// We need to further judge whether the rejoin is a secure rejoin or not.
+	spi_end();	
+	return flag;
+}
 
-uint8_t pac_type = 0; // 0: Beacon Request; 1: Rejoin Request; 2: Data Request
+/**
+ * @brief  Save incomming packets into buf, and return the stroed packets.
+ * @note   We omit the last two SCF bytes. It is used when we detect TX_END interrupt, and calling process_incoming_packets()
+ * @param  Output: buf
+ * @retval The length of contents in the packet, except for the SCF.
+ */
+uint8_t save_incomming_packets(unsigned char* buf)
+{
+	int16_t pkt_len = 0;
+	spi_begin();
+	spi_io(AT86RF230_BUF_READ);
 
-uint8_t rejoin_response_flag = 10;
- 
+	// Omit the last two bytes
+	pkt_len = spi_recv() - 2;
+	_delay_us(40);
+	assert(pkt_len > 0);
+	// Copy the packet into buf
+	spi_recv_block(buf, pkt_len);
+
+	spi_end();
+
+	return pkt_len;
+}
+
+/**
+ * @brief  Parse incomming packets, and set flags used for attacks
+ * @note   It is called when we detect TX_END interrupt.
+ * @retval None
+ */
+static void process_incomming_packets(void)
+{
+	unsigned char incomming_pkt[MAX_ZBEE_PKT_SIZE] = {};
+	int16_t pkt_len = 0;
+	// First save the incomming packets
+	pkt_len = save_incomming_packets(incomming_pkt);
+	// If the incomming packet is a TC Rejoin Response Command. TODO: Is the condition proved valid?
+	if ((pkt_len == TC_REJOIN_PKT_SIZE) && (incomming_pkt[TC_REJOIN_PKT_SIZE- 4] == 0x07)) {
+		uint8_t rejoin_status = incomming_pkt[TC_REJOIN_PKT_SIZE - 1];
+		if (rejoin_status == 0x00) {
+			// This TC Rejoin Response shows success.
+			rejoin_full_flag = 0;
+		}
+		else if (rejoin_status == 0x01)
+		{
+			// This TC Rejoin Response shows PAN FULL
+			rejoin_full_flag = 1;
+		}
+	}
+}
+
 #if defined(ATUSB) || defined(HULUSB)
 ISR(INT0_vect)
 #endif
@@ -170,20 +249,19 @@ ISR(TIMER1_CAPT_vect)
 	uint8_t irq = reg_read(REG_IRQ_STATUS);
 
 	if (irq == IRQ_RX_START) {
-	}
 
+	}
 	if (irq == IRQ_AMI)
 	{
-		// process_trust_center_rejoin(&rejoin_response_flag);
+		
 	}
 	if (irq == IRQ_TRX_END) {
+		process_incomming_packets();
 	}
-
 	if (mac_irq) {
 		if (mac_irq())
 			return;
 	}
-
 	if (eps[1].state == EP_IDLE) {
 		irq_serial = (irq_serial+1) | 0x80;
 		usb_send(&eps[1], &irq_serial, 1, done, NULL);

