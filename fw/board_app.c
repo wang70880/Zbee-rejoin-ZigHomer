@@ -154,61 +154,60 @@ static void done(void *user)
  * @param  Output: buf
  * @retval The length of contents in the packet, except for the SCF.
  */
-//uint8_t save_incomming_packets(unsigned char* buf)
-//{
-//	int16_t pkt_len = 0;
-//	spi_begin();
-//	spi_io(AT86RF230_BUF_READ);
-//
-//	// Omit the last two bytes
-//	pkt_len = spi_recv() - 2;
-//	_delay_us(10);
-//	assert(pkt_len > 0);
-//	// Copy the packet into buf
-//	spi_recv_block(buf, pkt_len);
-//
-//	spi_end();
-//
-//	return pkt_len;
-//}
+uint8_t save_incomming_packets(unsigned char* buf)
+{
+	int16_t pkt_len = 0;
+	spi_begin();
+	spi_io(AT86RF230_BUF_READ);
+
+	// Omit the last two bytes
+	pkt_len = spi_recv() - 2;
+	_delay_us(10);
+	assert(pkt_len > 0);
+	// Copy the packet into buf
+	spi_recv_block(buf, pkt_len);
+
+	spi_end();
+
+	return pkt_len;
+}
 
 /**
  * @brief  Parse incomming packets, and set flags used for attacks
  * @note   It is called when we detect TX_END interrupt.
  * @retval None
  */
-//static void process_incomming_packets(void)
-//{
-//	unsigned char incomming_pkt[MAX_ZBEE_PKT_SIZE] = {};
-//	int16_t pkt_len = 0;
-//	// First save the incomming packets
-//	pkt_len = save_incomming_packets(incomming_pkt);
-//	// TODO: Below is ad-hoc packet identification techniques: ARE THEY PROVED?
-//
-//	// If the incomming packet is a TC Rejoin Response Command
-//	if ((pkt_len == TC_REJOIN_PKT_SIZE) && (incomming_pkt[TC_REJOIN_PKT_SIZE- 4] == 0x07)) {
-//		uint8_t rejoin_status = incomming_pkt[TC_REJOIN_PKT_SIZE - 1];
-//		if (rejoin_status == 0x00) {
-//			// This TC Rejoin Response shows success.
-//			rejoin_full_flag = 0;
-//		}
-//		else if (rejoin_status == 0x01)
-//		{
-//			// This TC Rejoin Response shows PAN FULL
-//			rejoin_full_flag = 1;
-//		}
-//	}
-//	// If the incomming packet is a Beacon Request Command
-//	else if ((pkt_len == BEACON_RQ_PKT_SIZE) && (incomming_pkt[BEACON_RQ_PKT_SIZE -1] == 0x07))
-//	{
-//		beacon_request_flag = 1;
-//	}
-//	// If the incomming packet is a Data Reuqest Command
-//	else if ((pkt_len == DATA_RQ_PKT_SIZE) && (incomming_pkt[DATA_RQ_PKT_SIZE - 1] == 0x04))
-//	{
-//		data_request_flag = 1;
-//	}
-//}
+static void process_incomming_packets(void)
+{
+	unsigned char incomming_pkt[MAX_ZBEE_PKT_SIZE] = {};
+	int16_t pkt_len = 0;
+	// First save the incomming packets
+	pkt_len = save_incomming_packets(incomming_pkt);
+	// TODO: Below is ad-hoc packet identification techniques: ARE THEY PROVED?
+	// If the incomming packet is a TC Rejoin Response Command
+	if ((pkt_len == TC_REJOIN_PKT_SIZE) && (incomming_pkt[TC_REJOIN_PKT_SIZE- 4] == 0x07)) {
+		uint8_t rejoin_status = incomming_pkt[TC_REJOIN_PKT_SIZE - 1];
+		if (rejoin_status == 0x00) {
+			// This TC Rejoin Response shows success.
+			rejoin_full_flag = 0;
+		}
+		else if (rejoin_status == 0x01)
+		{
+			// This TC Rejoin Response shows PAN FULL
+			rejoin_full_flag = 1;
+		}
+	}
+	// If the incomming packet is a Beacon Request Command
+	else if ((pkt_len == BEACON_RQ_PKT_SIZE) && (incomming_pkt[BEACON_RQ_PKT_SIZE -1] == 0x07))
+	{
+		beacon_request_flag = 1;
+	}
+	// If the incomming packet is a Data Reuqest Command
+	else if ((pkt_len == DATA_RQ_PKT_SIZE) && (incomming_pkt[DATA_RQ_PKT_SIZE - 1] == 0x04))
+	{
+		data_request_flag = 1;
+	}
+}
 
 void clear_flag(void)
 {
@@ -218,55 +217,55 @@ void clear_flag(void)
 	data_request_flag = 0;
 }
 
-void detect_packet_type(void)
-{
-	uint8_t phy_len = 0;
-	// uint8_t radius = 0;
-
-	// uint8_t flag = 100;
-
-	uint8_t fcf[2];
-	// uint8_t saddr[2];
-	// uint8_t daddr[2];
-	// uint8_t dstpan[2];
-
-	// uint8_t analyze_nwk = 0;
-	uint8_t analyze_mac = 1;
-	// uint8_t command_id = 0;
-
-	spi_begin();
-	spi_io(AT86RF230_BUF_READ);
-	// Analyze phy len
-	phy_len = spi_recv();
-	if (phy_len <= 8) {
-		spi_end();
-		return ;
-	}
-	// Analyze MAC
-	if (analyze_mac) {
-		// Check MAC FCF
-		_delay_us(32);
-		fcf[0] = spi_recv();
-		_delay_us(32);
-		fcf[1] = spi_recv();
-		spi_end();
-		if((fcf[0] == 0x03) && (fcf[1] == 0x08)) // Beacon Request
-		{
-			beacon_request_flag = 1;
-		}
-		else if ((fcf[0] == 0x61) && (fcf[1] == 0x88)) // NWK Rejoin Request
-		{
-			if (phy_len < 35) {
-				tc_rejoin_request_flag = 1;
-			}
-		}
-		else if ((fcf[0] == 0x63) && (fcf[1] == 0x88)) // Data Request
-		{
-			data_request_flag = 1;
-		}
-	}
-	// We need to further judge whether the rejoin is a secure rejoin or not.
-}
+//void detect_packet_type(void)
+//{
+//	uint8_t phy_len = 0;
+//	// uint8_t radius = 0;
+//
+//	// uint8_t flag = 100;
+//
+//	uint8_t fcf[2];
+//	// uint8_t saddr[2];
+//	// uint8_t daddr[2];
+//	// uint8_t dstpan[2];
+//
+//	// uint8_t analyze_nwk = 0;
+//	uint8_t analyze_mac = 1;
+//	// uint8_t command_id = 0;
+//
+//	spi_begin();
+//	spi_io(AT86RF230_BUF_READ);
+//	// Analyze phy len
+//	phy_len = spi_recv();
+//	if (phy_len <= 8) {
+//		spi_end();
+//		return ;
+//	}
+//	// Analyze MAC
+//	if (analyze_mac) {
+//		// Check MAC FCF
+//		_delay_us(32);
+//		fcf[0] = spi_recv();
+//		_delay_us(32);
+//		fcf[1] = spi_recv();
+//		spi_end();
+//		if((fcf[0] == 0x03) && (fcf[1] == 0x08)) // Beacon Request
+//		{
+//			beacon_request_flag = 1;
+//		}
+//		else if ((fcf[0] == 0x61) && (fcf[1] == 0x88)) // NWK Rejoin Request
+//		{
+//			if (phy_len < 35) {
+//				tc_rejoin_request_flag = 1;
+//			}
+//		}
+//		else if ((fcf[0] == 0x63) && (fcf[1] == 0x88)) // Data Request
+//		{
+//			data_request_flag = 1;
+//		}
+//	}
+//	// We need to further judge whether the rejoin is a secure rejoin or not.
+//}
 
 #if defined(ATUSB) || defined(HULUSB)
 ISR(INT0_vect)
@@ -284,8 +283,8 @@ ISR(TIMER1_CAPT_vect)
 	{
 	}
 	if (irq == IRQ_TRX_END) {
-		//process_incomming_packets();
-		detect_packet_type();
+		process_incomming_packets();
+		// detect_packet_type();
 	}
 	if (mac_irq) {
 		if (mac_irq())
