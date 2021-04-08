@@ -1,8 +1,8 @@
 /*
  * fw/attacks/attack.h - Declaration of the attack function
  *
- * Written 2020 by Dimitrios-Georgios Akestoridis
- * Copyright 2020 Dimitrios-Georgios Akestoridis
+ * Written 2021 by Wang Jincheng
+ * Copyright 2021 Wang Jincheng
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,8 +18,6 @@
 
 #include <stdbool.h>
 #include <string.h>
-#include <stddef.h>
-#include <stdlib.h>
 #include <stdint.h>
 
 #include <avr/io.h>
@@ -36,12 +34,28 @@
 #include "atusb/ep0.h"
 #include "at86rf230.h"
 
-#define REJOIN_REQUEST_INTERVAL 10000
+#define REJOIN_REQUEST_INTERVAL 200
 #define MAX_REJOIN_REQUEST_NUM 1000
 #define MAX_ZBEE_PKT_SIZE 255
 #define TC_REJOIN_PKT_SIZE 37
+#define BEACON_RQ_PKT_SIZE 8
+#define DATA_RQ_PKT_SIZE   10
 
-#define ST_SENSOR_MAC_ADDR 0x286d9700010d8ebc
+// MAC Addr for devices
+#define ST_HUB_MAC_ADDR	   0x286d970002054a14   // SAMJIN
+#define ST_SENSOR_MAC_ADDR 0x286d9700010d8ebc   // SAMJIN
+#define ST_OUTLET_MAC_ADDR 0xccccccfffedbbb3e   // Silicon
+#define IKEA_SENSOR_MAC_ADDR 0x680ae2fffe31681c // Silicon MCU
+#define IKEA_BULB_MAC_ADDR 0x847127fffe410185 // Silicon MCU
+#define PHILIPS_BRIDGE_MAC_ADDR  0x00178801053fab13
+#define PHILIPS_BULB_MAC_ADDR 0x0017880103067f46
+#define PHILIPS_SWITCH_MAC_ADDR 0x0017880108f47acc
+
+// EPAN ID
+#define ST_EPAN_ID  0x0ab4da5c2ea6d3ec
+#define PHILIPS_EPAN_ID 0x312c9504a155c118
+#define REG_CHANGE_DELAY 5
+#define DELAY_1 _delay_ms(1000)
 
 enum {
 	ZBEE_MAC_CMD_DATA_RQ,
@@ -63,7 +77,11 @@ typedef struct {
     uint64_t     epan;
     uint16_t     short_addr;
     uint64_t     long_addr;
-	uint8_t		 polling_type; // type = 2: high polling rate; type = 1: normal polling rate; type = 0: low polling rate
+	uint8_t		 polling_type; // type = 2: high polling rate; type = 1: low polling rate; type = 0: N/A
+	uint8_t		 device_type;  // type = 2; ZED;			   type = 1: ZR;		type = 0: ZC
+	uint8_t		 rx_when_idle; //  1: True; 0: False
+	uint8_t		 coordinator_flag;
+	uint8_t		 beacon_update_id;
 } ieee802154_addr;
 
 typedef struct {
@@ -87,7 +105,7 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 				   rx_aack_config* aack_config);
 
 void reconnaissance_attack(void);
-uint8_t capacity_attack(ieee802154_addr* hub_addr, uint64_t random_addr);
-uint8_t offline_attack(ieee802154_addr* hub_addr, ieee802154_addr* zed_addr, uint64_t random_addr);
-void process_trust_center_rejoin(uint8_t *rejoin_response_flag);
+uint8_t capacity_attack(ieee802154_addr* hub_addr, uint64_t random_addr, uint8_t type);
+uint8_t offline_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, uint64_t random_addr);
+uint8_t hijacking_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, uint64_t random_addr);
 #endif /* !ATTACK_H */

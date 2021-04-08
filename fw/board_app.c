@@ -22,6 +22,9 @@ uint8_t save_incomming_packets(unsigned char* buf);
 static volatile uint32_t timer_h = 0;	/* 2^(16+32) / 8 MHz = ~1.1 years */
 uint8_t irq_serial;
 uint8_t rejoin_full_flag = 0;
+uint8_t beacon_request_flag = 0;
+uint8_t tc_rejoin_request_flag = 0;
+uint8_t data_request_flag = 0;
 
 void reset_cpu(void)
 {
@@ -203,7 +206,7 @@ uint8_t save_incomming_packets(unsigned char* buf)
 
 	// Omit the last two bytes
 	pkt_len = spi_recv() - 2;
-	_delay_us(40);
+	_delay_us(10);
 	assert(pkt_len > 0);
 	// Copy the packet into buf
 	spi_recv_block(buf, pkt_len);
@@ -224,7 +227,9 @@ static void process_incomming_packets(void)
 	int16_t pkt_len = 0;
 	// First save the incomming packets
 	pkt_len = save_incomming_packets(incomming_pkt);
-	// If the incomming packet is a TC Rejoin Response Command. TODO: Is the condition proved valid?
+	// TODO: Below is ad-hoc packet identification techniques: ARE THEY PROVED?
+
+	// If the incomming packet is a TC Rejoin Response Command
 	if ((pkt_len == TC_REJOIN_PKT_SIZE) && (incomming_pkt[TC_REJOIN_PKT_SIZE- 4] == 0x07)) {
 		uint8_t rejoin_status = incomming_pkt[TC_REJOIN_PKT_SIZE - 1];
 		if (rejoin_status == 0x00) {
@@ -236,6 +241,16 @@ static void process_incomming_packets(void)
 			// This TC Rejoin Response shows PAN FULL
 			rejoin_full_flag = 1;
 		}
+	}
+	// If the incomming packet is a Beacon Request Command
+	else if ((pkt_len == BEACON_RQ_PKT_SIZE) && (incomming_pkt[BEACON_RQ_PKT_SIZE -1] == 0x07))
+	{
+		beacon_request_flag = 1;
+	}
+	// If the incomming packet is a Data Reuqest Command
+	else if ((pkt_len == DATA_RQ_PKT_SIZE) && (incomming_pkt[DATA_RQ_PKT_SIZE - 1] == 0x04))
+	{
+		data_request_flag = 1;
 	}
 }
 

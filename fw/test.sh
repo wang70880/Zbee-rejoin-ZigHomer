@@ -1,3 +1,5 @@
+#!/bin/bash
+attackID=$1
 atusb(){
 	output=$(iwpan dev)
 	output1=$(echo $output | awk -F' ' '{print $1}')   #    PHY#23, for example
@@ -16,7 +18,7 @@ atusb(){
 
 atusb_start(){
 	sudo make clean
-	sudo make dfu ATTACKID=12
+	sudo make dfu ATTACKID=$attackID
 	sleep 4
 	atusb
 	command1="sudo ip link set attack0 up"

