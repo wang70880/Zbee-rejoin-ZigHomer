@@ -277,7 +277,6 @@ ISR(TIMER1_CAPT_vect)
 	uint8_t irq = reg_read(REG_IRQ_STATUS);
 
 	if (irq == IRQ_RX_START) {
-		detect_packet_type();
 	}
 	if (irq == IRQ_AMI)
 	{
