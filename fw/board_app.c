@@ -185,8 +185,8 @@ static void process_incomming_packets(void)
 	pkt_len = save_incomming_packets(incomming_pkt);
 	// TODO: Below is ad-hoc packet identification techniques: ARE THEY PROVED?
 	// If the incomming packet is a TC Rejoin Response Command
-	if ((pkt_len == TC_REJOIN_PKT_SIZE) && (incomming_pkt[TC_REJOIN_PKT_SIZE- 4] == 0x07)) {
-		uint8_t rejoin_status = incomming_pkt[TC_REJOIN_PKT_SIZE - 1];
+	if ((pkt_len == TC_REJOIN_RSP_PKT_SIZE) && (incomming_pkt[TC_REJOIN_RSP_PKT_SIZE- 4] == 0x07)) {
+		uint8_t rejoin_status = incomming_pkt[TC_REJOIN_RSP_PKT_SIZE - 1];
 		if (rejoin_status == 0x00) {
 			// This TC Rejoin Response shows success.
 			rejoin_full_flag = 0;
@@ -206,6 +206,17 @@ static void process_incomming_packets(void)
 	else if ((pkt_len == DATA_RQ_PKT_SIZE) && (incomming_pkt[DATA_RQ_PKT_SIZE - 1] == 0x04))
 	{
 		data_request_flag = 1;
+	}
+	else if ((pkt_len == TC_REJOIN_REQ_PKT_SIZE))
+	{
+		uint8_t nwk_fcf_high = incomming_pkt[10];
+		if ((nwk_fcf_high & 0x02) == 0) // This packet is unencrypted.
+		{
+			if (incomming_pkt[TC_REJOIN_REQ_PKT_SIZE - 2] == 0x06)
+			{
+				tc_rejoin_request_flag = 1;
+			}
+		}
 	}
 }
 
@@ -282,7 +293,10 @@ ISR(TIMER1_CAPT_vect)
 	{
 	}
 	if (irq == IRQ_TRX_END) {
-		process_incomming_packets();
+		if (PROCESS_RX_PACKET)
+		{
+			process_incomming_packets();
+		}
 		// detect_packet_type();
 	}
 	if (mac_irq) {

@@ -34,10 +34,13 @@
 #include "atusb/ep0.h"
 #include "at86rf230.h"
 
-#define REJOIN_REQUEST_INTERVAL 200
+#define PROCESS_RX_PACKET 1
+
+#define REJOIN_REQUEST_INTERVAL 100
 #define MAX_REJOIN_REQUEST_NUM 1000
 #define MAX_ZBEE_PKT_SIZE 255
-#define TC_REJOIN_PKT_SIZE 37
+#define TC_REJOIN_REQ_PKT_SIZE 27
+#define TC_REJOIN_RSP_PKT_SIZE 37
 #define BEACON_RQ_PKT_SIZE 8
 #define DATA_RQ_PKT_SIZE   10
 
@@ -45,15 +48,25 @@
 #define ST_HUB_MAC_ADDR	   0x286d970002054a14   // SAMJIN
 #define ST_SENSOR_MAC_ADDR 0x286d9700010d8ebc   // SAMJIN
 #define ST_OUTLET_MAC_ADDR 0xccccccfffedbbb3e   // Silicon
+#define IKEA_HUB_MAC_ADDR 0x804b50fffe4f8c81
 #define IKEA_SENSOR_MAC_ADDR 0x680ae2fffe31681c // Silicon MCU
 #define IKEA_BULB_MAC_ADDR 0x847127fffe410185 // Silicon MCU
 #define PHILIPS_BRIDGE_MAC_ADDR  0x00178801053fab13
-#define PHILIPS_BULB_MAC_ADDR 0x0017880103067f46
+#define PHILIPS_BULB_MAC_ADDR   0x0017880103067f46
 #define PHILIPS_SWITCH_MAC_ADDR 0x0017880108f47acc
+#define XIAOMI_HUB_MAC_ADDR 0x00158d0003d43861
+#define XIAOMI_HUB2_MAC_ADDR 0x588e81fffe4c8a43 // Silicon
+#define XIAOMI_SWITCH_MAC_ADDR 0x00158d000322d871
+#define XIAOMI_HUMAN_SENSOR_ADDR 0x00158d000632b755
+
+#define YALE_LOCK_MAC_ADDR 0x000d6f000fed30a6
 
 // EPAN ID
 #define ST_EPAN_ID  0x0ab4da5c2ea6d3ec
 #define PHILIPS_EPAN_ID 0x312c9504a155c118
+#define XIAOMI_EPAN_ID 0x00158d0003d43861
+#define XIAOMI2_EPAN_ID 0x6b0185760a85c757
+#define IKEA_EPAN_ID 0xc6cb50753689b16d
 #define REG_CHANGE_DELAY 5
 #define DELAY_1 _delay_ms(1000)
 
@@ -61,6 +74,7 @@ enum {
 	ZBEE_MAC_CMD_DATA_RQ,
 	ZBEE_MAC_CMD_BEACON_RQ,
 	ZBEE_MAC_CMD_BEACON_RP,
+	ZBEE_MAC_CMD_ORPHAN_NOTIF,
 	ZBEE_NWK_CMD_REJOIN_RQ,
 	ZBEE_NWK_CMD_REJOIN_RP,
 	ZBEE_APS_CMD_KEY_TRANSPORT
@@ -80,8 +94,8 @@ typedef struct {
 	uint8_t		 polling_type; // type = 2: high polling rate; type = 1: low polling rate; type = 0: N/A
 	uint8_t		 device_type;  // type = 2; ZED;			   type = 1: ZR;		type = 0: ZC
 	uint8_t		 rx_when_idle; //  1: True; 0: False
-	uint8_t		 coordinator_flag;
 	uint8_t		 beacon_update_id;
+	uint8_t		 coordinator_flag;
 } ieee802154_addr;
 
 typedef struct {
@@ -95,6 +109,7 @@ typedef struct {
 void send_data_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
 void send_beacon_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
 void send_beacon_response(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
+void send_orphan_notification(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
 void send_rejoin_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
 void send_rejoin_response(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
 void send_transport_key(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);

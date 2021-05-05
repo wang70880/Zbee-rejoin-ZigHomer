@@ -102,6 +102,9 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 		case ZBEE_MAC_CMD_BEACON_RP :
 			send_beacon_response(security, dst_addr, src_addr);
 			break;
+		case ZBEE_MAC_CMD_ORPHAN_NOTIF :
+			send_orphan_notification(security, dst_addr, src_addr);
+			break;
 		case ZBEE_NWK_CMD_REJOIN_RQ :
 			send_rejoin_request(security, dst_addr, src_addr);
 			break;
@@ -224,6 +227,26 @@ void send_beacon_response(uint8_t security, ieee802154_addr* dst_addr, ieee80215
 	count += spi_send_blocks(&src_addr->epan, sizeof(src_addr->epan));
 	count += spi_send_blocks(offset, sizeof(offset));
 	count += spi_send_blocks(&update_id, sizeof(update_id));
+
+	assert(count == length - 1);
+}
+
+void send_orphan_notification(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr)
+{
+	count = 0;
+	length = 16 + 2;
+	FCF = 0xc843;
+	seqno = 0xff;
+	cmd = 0x06;
+	uint16_t broad_addr = 0xffff;
+
+	count += spi_send_blocks(&length, sizeof(length));
+	count += spi_send_blocks(&FCF, sizeof(FCF));
+	count += spi_send_blocks(&seqno, sizeof(seqno));
+	count += spi_send_blocks(&broad_addr, sizeof(broad_addr));
+	count += spi_send_blocks(&broad_addr, sizeof(broad_addr));
+	count += spi_send_blocks(&src_addr->long_addr, sizeof(src_addr->long_addr));
+	count += spi_send_blocks(&cmd, sizeof(cmd));
 
 	assert(count == length - 1);
 }
