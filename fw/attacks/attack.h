@@ -71,6 +71,7 @@
 #define DELAY_1 _delay_ms(1000)
 
 enum {
+	ZBEE_ACK,
 	ZBEE_MAC_CMD_DATA_RQ,
 	ZBEE_MAC_CMD_BEACON_RQ,
 	ZBEE_MAC_CMD_BEACON_RP,
@@ -104,8 +105,10 @@ typedef struct {
 	addr_16 target_pan_id;
 	uint8_t dis_ack;
 	uint8_t pending;
+	uint8_t pass_ARET_check;
 }rx_aack_config;
 
+void send_ack(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
 void send_data_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
 void send_beacon_request(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
 void send_beacon_response(uint8_t security, ieee802154_addr* dst_addr, ieee802154_addr* src_addr);
@@ -123,4 +126,5 @@ void reconnaissance_attack(void);
 uint8_t capacity_attack(ieee802154_addr* hub_addr, uint64_t random_addr, uint8_t type);
 uint8_t offline_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, uint64_t random_addr);
 uint8_t hijacking_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, uint64_t random_addr);
+
 #endif /* !ATTACK_H */
