@@ -365,6 +365,7 @@ void send_transport_key(uint8_t security, ieee802154_addr* dst_addr, ieee802154_
 	count += spi_send_blocks(&APS_SCF, sizeof(APS_SCF));
 	count += spi_send_blocks(&frame_counter, sizeof(frame_counter));
 	count += spi_send_blocks(&src_addr->long_addr, sizeof(src_addr->long_addr));
+
 	// Because of unknown bugs (Maybe memory limitation, we can only send payload 5 bytes each time. (Total 35))
 //unsigned char encrypted_payload[35] = {
 //		0x1f, 0xd0, 0x09, 0x1b, 0xb8, \

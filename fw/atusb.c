@@ -44,13 +44,13 @@ int main(void)
 	// Here we let dst_device = hub, src_device = sensor to test our API
 	
 	hub_addr.pan = 0x4567;
-	hub_addr.epan = ST_EPAN_ID; // Used for Philips
-	hub_addr.short_addr = 0x0000;
+	hub_addr.epan = ST_EPAN_ID;
+	hub_addr.short_addr = 0x0001;
 	hub_addr.long_addr = ST_HUB_MAC_ADDR;
 	hub_addr.device_type = 0;
 	hub_addr.polling_type = 0;
 	hub_addr.coordinator_flag = 1;
-	hub_addr.beacon_update_id = 5;
+	hub_addr.beacon_update_id = 2;
 
 	bulb_addr = hub_addr;
 	bulb_addr.short_addr = 0x0005;
