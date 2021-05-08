@@ -43,9 +43,9 @@ int main(void)
 	/** TEST FIELD **/
 	// Here we let dst_device = hub, src_device = sensor to test our API
 	
-	hub_addr.pan = 0x4567;
+	hub_addr.pan = 0x2ca2;
 	hub_addr.epan = ST_EPAN_ID;
-	hub_addr.short_addr = 0x0001;
+	hub_addr.short_addr = 0x0000;
 	hub_addr.long_addr = ST_HUB_MAC_ADDR;
 	hub_addr.device_type = 0;
 	hub_addr.polling_type = 0;
@@ -66,7 +66,7 @@ int main(void)
 	victim_addr.rx_when_idle = 1;
 
 	/** END OF TEST FIELD **/
-	attack_no = 3;
+	attack_no = 1;
 
 	while (1)
 	{

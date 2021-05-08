@@ -297,8 +297,8 @@ ISR(TIMER1_CAPT_vect)
 					beacon_finish_flag = 0;
 				}
 			}
+			clear_flag();
 		}
-		clear_flag();
 	}
 	if (mac_irq) {
 		if (mac_irq())

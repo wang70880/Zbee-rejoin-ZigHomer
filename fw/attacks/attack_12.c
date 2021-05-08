@@ -280,7 +280,7 @@ uint8_t capacity_attack(ieee802154_addr* dst_addr, uint64_t random_addr, uint8_t
 {
 	int32_t trial_count = 0;
 	ieee802154_addr ghost_addr = *dst_addr;
-	ghost_addr.short_addr  = 0x3234;
+	ghost_addr.short_addr  = 0x0001;
 	ghost_addr.long_addr = random_addr;
 	ghost_addr.device_type = type;
 	ghost_addr.rx_when_idle = 1;
