@@ -123,6 +123,7 @@ void send_zbee_cmd(uint8_t command, uint8_t security,
 				   rx_aack_config* aack_config);
 
 void reconnaissance_attack(void);
+uint8_t collision_attack(ieee802154_addr* hub_addr, uint64_t random_addr, uint8_t type);
 uint8_t capacity_attack(ieee802154_addr* hub_addr, uint64_t random_addr, uint8_t type);
 uint8_t offline_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, uint64_t random_addr);
 uint8_t hijacking_attack(ieee802154_addr* hub_addr, ieee802154_addr* victim_addr, uint64_t random_addr);

